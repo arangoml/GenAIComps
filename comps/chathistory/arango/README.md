@@ -7,15 +7,6 @@ This README provides setup guides and all the necessary information about the Ch
 ## Setup Environment Variables
 
 ```bash
-export http_proxy=${your_http_proxy}
-export https_proxy=${your_http_proxy}
-export MONGO_HOST=${MONGO_HOST}
-export MONGO_PORT=27017
-export DB_NAME=${DB_NAME}
-export COLLECTION_NAME=${COLLECTION_NAME}
-```
-
-```bash
 export ARANGODB_HOST=${ARANGODB_HOST}
 export ARANGODB_PORT=${ARANGODB_PORT}
 export ARANGODB_USERNAME=${ARANGODB_USERNAME}
@@ -55,7 +46,8 @@ docker build -t opea/chathistory-arango-server:latest --build-arg https_proxy=$h
 - Run the Chat History microservice
 
   ```bash
-  docker run -p 6012:6012 \  --network chathistory-network \    
+  docker run -p 6012:6012 \  
+  --network chathistory-network \    
   -e http_proxy=$http_proxy \
   -e https_proxy=$https_proxy \
   -e no_proxy=$no_proxy \
@@ -104,25 +96,25 @@ The Chat History microservice exposes the following API endpoints:
 
   ```bash
   curl -X 'POST' \
-    http://localhost:6012/v1/chathistory/get \
+    http://${host_ip}:6012/v1/chathistory/get \
     -H 'accept: application/json' \
     -H 'Content-Type: application/json' \
     -d '{
-    "user": "test", "id":"673255bad3e51a6fdef12b5e"}'
+    "user": "test", "id":"48918"}'
   ```
 
 - Update the conversation by id.
 
   ```bash
   curl -X 'POST' \
-    http://localhost:6012/v1/chathistory/create \
+    http://${host_ip}:6012/v1/chathistory/create \
     -H 'accept: application/json' \
     -H 'Content-Type: application/json' \
     -d '{
     "data": {
       "messages": "test Messages Update", "user": "test"
     },
-    "id":"673255bad3e51a6fdef12b5e"
+    "id":"48918"
   }'
   ```
 
@@ -134,5 +126,5 @@ The Chat History microservice exposes the following API endpoints:
     -H 'accept: application/json' \
     -H 'Content-Type: application/json' \
     -d '{
-    "user": "test", "id":"668620173180b591e1e0cd74"}'
+    "user": "test", "id":"48918"}'
   ```

@@ -145,25 +145,30 @@ def delete_documents(document: ChatId):
 
 
 if __name__ == "__main__":
-    #opea_microservices["opea_service@chathistory_arango"].start()
-    print("Creating document")
-    doc_id = create_documents(ChatMessage(data=ChatCompletionRequest(user="test", messages="test Messages"), first_query=None))
-    breakpoint()
-    doc_id_2 = create_documents(ChatMessage(data=ChatCompletionRequest(user="test", messages="test Messages 2"), first_query=None))
-    breakpoint()
-    # test get document by id
-    print(f"Getting document with id: {doc_id_2}")
-    print(get_documents(ChatId(user="test", id=doc_id_2)))
-    # # test get all documents
-    print(f"Getting all documents for user: test")
-    breakpoint()
-    print(get_documents(ChatId(user="test", id=None)))
-    # test update document
-    create_documents(ChatMessage(data=ChatCompletionRequest(user="test", messages="test Messages 3"), first_query=None, id=doc_id_2))
-    breakpoint()
-    print(f"Getting document with id: {doc_id_2}")
-    print(get_documents(ChatId(user="test", id=doc_id_2)))
-    # test delete document
-    breakpoint()
-    delete_documents(ChatId(user="test", id=doc_id_2))
-    print(f"Deleted document with id: {doc_id_2}")
+    opea_microservices["opea_service@chathistory_arango"].start()
+    # import asyncio
+ 
+    # async def main():
+    #     print("Creating document")
+    #     doc_id = await create_documents(ChatMessage(data=ChatCompletionRequest(user="test", messages="test Messages"), first_query=None))
+    #     breakpoint()
+    #     doc_id_2 = await create_documents(ChatMessage(data=ChatCompletionRequest(user="test", messages="test Messages 2"), first_query=None))
+    #     breakpoint()
+    #     # test get document by id
+    #     print(f"Getting document with id: {doc_id_2}")
+    #     print(await get_documents(ChatId(user="test", id=doc_id_2)))
+    #     # # test get all documents
+    #     print(f"Getting all documents for user: test")
+    #     breakpoint()
+    #     print(await get_documents(ChatId(user="test", id=None)))
+    #     # test update document
+    #     await create_documents(ChatMessage(data=ChatCompletionRequest(user="test", messages="test Messages 3"), first_query=None, id=doc_id_2))
+    #     breakpoint()
+    #     print(f"Getting document with id: {doc_id_2}")
+    #     print(await get_documents(ChatId(user="test", id=doc_id_2)))
+    #     # test delete document
+    #     breakpoint()
+    #     print(await delete_documents(ChatId(user="test", id=doc_id_2)))
+    #     print(f"Deleted document with id: {doc_id_2}")
+
+    # asyncio.run(main())

@@ -1,6 +1,4 @@
-﻿# Copyright (C) 2024 Intel Corporation
-# SPDX-License-Identifier: Apache-2.0
-import os
+﻿import os
 from typing import Optional
 
 from fastapi import HTTPException
@@ -46,7 +44,7 @@ def get_first_string(value):
     input_datatype=ChatMessage,
     port=6012,
 )
-def create_documents(document: ChatMessage):
+async def create_documents(document: ChatMessage):
     """Creates or updates a document in the document store.
 
     Args:
@@ -83,7 +81,7 @@ def create_documents(document: ChatMessage):
     input_datatype=ChatId,
     port=6012,
 )
-def get_documents(document: ChatId):
+async def get_documents(document: ChatId):
     """Retrieves documents from the document store based on the provided ChatId.
 
     Args:
@@ -117,7 +115,7 @@ def get_documents(document: ChatId):
     input_datatype=ChatId,
     port=6012,
 )
-def delete_documents(document: ChatId):
+async def delete_documents(document: ChatId):
     """Deletes a document from the document store based on the provided ChatId.
 
     Args:
@@ -146,3 +144,4 @@ def delete_documents(document: ChatId):
 
 if __name__ == "__main__":
     opea_microservices["opea_service@chathistory_arango"].start()
+    
