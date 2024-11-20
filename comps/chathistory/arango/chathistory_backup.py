@@ -1,4 +1,6 @@
-﻿import os
+﻿# Copyright (C) 2024 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+import os
 from typing import Optional
 
 from fastapi import HTTPException
@@ -44,7 +46,7 @@ def get_first_string(value):
     input_datatype=ChatMessage,
     port=6012,
 )
-async def create_documents(document: ChatMessage):
+def create_documents(document: ChatMessage):
     """Creates or updates a document in the document store.
 
     Args:
@@ -63,9 +65,9 @@ async def create_documents(document: ChatMessage):
         if document.first_query is None:
             document.first_query = get_first_string(document.data.messages)
         if document.id:
-            res = await store.update_document(document.id, document.data, document.first_query)
+            res = store.update_document(document.id, document.data, document.first_query)
         else:
-            res = await store.save_document(document)
+            res = store.save_document(document)
         if logflag:
             logger.info(res)
         return res
@@ -81,7 +83,7 @@ async def create_documents(document: ChatMessage):
     input_datatype=ChatId,
     port=6012,
 )
-async def get_documents(document: ChatId):
+def get_documents(document: ChatId):
     """Retrieves documents from the document store based on the provided ChatId.
 
     Args:
@@ -96,9 +98,9 @@ async def get_documents(document: ChatId):
         store = DocumentStore(document.user)
         store.initialize_storage()
         if document.id is None:
-            res = await store.get_all_documents_of_user()
+            res = store.get_all_documents_of_user()
         else:
-            res = await store.get_user_documents_by_id(document.id)
+            res = store.get_user_documents_by_id(document.id)
         if logflag:
             logger.info(res)
         return res
@@ -115,7 +117,7 @@ async def get_documents(document: ChatId):
     input_datatype=ChatId,
     port=6012,
 )
-async def delete_documents(document: ChatId):
+def delete_documents(document: ChatId):
     """Deletes a document from the document store based on the provided ChatId.
 
     Args:
@@ -132,7 +134,7 @@ async def delete_documents(document: ChatId):
         if document.id is None:
             raise Exception("Document id is required.")
         else:
-            res = await store.delete_document(document.id)
+            res = store.delete_document(document.id)
         if logflag:
             logger.info(res)
         return res
@@ -143,5 +145,25 @@ async def delete_documents(document: ChatId):
 
 
 if __name__ == "__main__":
-    opea_microservices["opea_service@chathistory_arango"].start()
-    # create_documents(ChatMessage(data=ChatCompletionRequest(user="test", messages="test Messages"), first_query=None))
+    #opea_microservices["opea_service@chathistory_arango"].start()
+    print("Creating document")
+    doc_id = create_documents(ChatMessage(data=ChatCompletionRequest(user="test", messages="test Messages"), first_query=None))
+    breakpoint()
+    doc_id_2 = create_documents(ChatMessage(data=ChatCompletionRequest(user="test", messages="test Messages 2"), first_query=None))
+    breakpoint()
+    # test get document by id
+    print(f"Getting document with id: {doc_id_2}")
+    print(get_documents(ChatId(user="test", id=doc_id_2)))
+    # # test get all documents
+    print(f"Getting all documents for user: test")
+    breakpoint()
+    print(get_documents(ChatId(user="test", id=None)))
+    # test update document
+    create_documents(ChatMessage(data=ChatCompletionRequest(user="test", messages="test Messages 3"), first_query=None, id=doc_id_2))
+    breakpoint()
+    print(f"Getting document with id: {doc_id_2}")
+    print(get_documents(ChatId(user="test", id=doc_id_2)))
+    # test delete document
+    breakpoint()
+    delete_documents(ChatId(user="test", id=doc_id_2))
+    print(f"Deleted document with id: {doc_id_2}")

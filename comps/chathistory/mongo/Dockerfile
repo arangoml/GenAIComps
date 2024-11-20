@@ -23,7 +23,7 @@ RUN pip install --no-cache-dir --upgrade pip setuptools && \
     pip install --no-cache-dir -r /home/user/comps/chathistory/mongo/requirements.txt && \
     pip install --no-cache-dir -r /home/user/requirements.txt
 
-ENV PYTHONPATH=$PYTHONPATH:/home/user
+ENV PYTHONPATH=/home/user
 
 WORKDIR /home/user/comps/chathistory/mongo
 

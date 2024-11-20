@@ -1,6 +1,6 @@
-# 📝 Chat History Microservice with MongoDB
+# 📝 Chat History Microservice with ArangoDB
 
-This README provides setup guides and all the necessary information about the Chat History microservice with MongoDB database.
+This README provides setup guides and all the necessary information about the Chat History microservice with ArangoDB database.
 
 ---
 
@@ -15,29 +15,58 @@ export DB_NAME=${DB_NAME}
 export COLLECTION_NAME=${COLLECTION_NAME}
 ```
 
+```bash
+export ARANGODB_HOST=${ARANGODB_HOST}
+export ARANGODB_PORT=${ARANGODB_PORT}
+export ARANGODB_USERNAME=${ARANGODB_USERNAME}
+export ARANGODB_PASSWORD=${ARANGODB_PASSWORD}
+export DB_NAME=${DB_NAME}
+export COLLECTION_NAME=${COLLECTION_NAME}
+export PYTHONPATH={Path to base of directory}
+```
+
 ---
 
 ## 🚀Start Microservice with Docker
+
+### Create Docker Network
+
+```bash
+docker network create chathistory-network
+``` 
 
 ### Build Docker Image
 
 ```bash
 cd ../../../../
-docker build -t opea/chathistory-mongo-server:latest --build-arg https_proxy=$https_proxy --build-arg http_proxy=$http_proxy -f comps/chathistory/mongo/Dockerfile .
+docker build -t opea/chathistory-arango-server:latest --build-arg https_proxy=$https_proxy --build-arg http_proxy=$http_proxy -f comps/chathistory/arango/Dockerfile .
 ```
 
 ### Run Docker with CLI
 
-- Run MongoDB image container
+- Run ArangoDB image container
 
   ```bash
-  docker run -d -p 27017:27017 --name=mongo mongo:latest
+  docker run -d -p 8529:8529 --network=chathistory-network --name=arango arangodb/arangodb:latest
+
+  docker start arango
   ```
 
 - Run the Chat History microservice
 
   ```bash
-  docker run -d --name="chathistory-mongo-server" -p 6012:6012 -e http_proxy=$http_proxy -e https_proxy=$https_proxy -e no_proxy=$no_proxy -e MONGO_HOST=${MONGO_HOST} -e MONGO_PORT=${MONGO_PORT} -e DB_NAME=${DB_NAME} -e COLLECTION_NAME=$ {COLLECTION_NAME} opea/chathistory-mongo-server:latest
+  docker run -p 6012:6012 \  --network chathistory-network \    
+  -e http_proxy=$http_proxy \
+  -e https_proxy=$https_proxy \
+  -e no_proxy=$no_proxy \
+  -e ARANGODB_HOST=host.docker.internal \
+  -e ARANGODB_PORT=${ARANGODB_PORT} \
+  -e DB_NAME=${DB_NAME} \
+  -e COLLECTION_NAME=${COLLECTION_NAME} \
+  -e ARANGODB_USERNAME=${ARANGODB_USERNAME} \
+  -e ARANGODB_PASSWORD=${ARANGODB_PASSWORD} \
+  opea/chathistory-arango-server:latest
+
   ```
 
 ---

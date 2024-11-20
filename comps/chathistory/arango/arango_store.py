@@ -1,6 +1,3 @@
-# # Copyright (C) 2024 Intel Corporation
-# # SPDX-License-Identifier: Apache-2.0
-
 from config import COLLECTION_NAME
 from arango_conn import ArangoClient
 from pydantic import BaseModel
@@ -69,21 +66,55 @@ class DocumentStore:
             KeyError: If an invalid document_id is provided.
             Exception: If an error occurs during the update process.
         """
-        try:
-            cursor = self.db_client.aql.execute(f"""
-                FOR doc IN @@collection
-                    FILTER doc._key == @document_id AND doc.data.user == @user
-                    LIMIT 1
-                    UPDATE doc WITH @body IN @@collection
-                    OPTIONS {{ keepNull: @keep_none, mergeObjects: @merge }}
-            """,
-                bind_vars={"@collection": self.collection.name, "document_id": document_id, "user": self.user, "body": {"data": updated_data.model_dump(by_alias=True, mode="json"), "first_query": first_query}, "keep_none": True, "merge": True}
-            )
-            return "Updated document : {}".format(document_id)
+        # try:
 
+        _id = f"{self.collection.name}/{document_id}"
+
+        # 1. Make sure the document can be modified by the User
+        document = self.db_client.get_document(_id)
+
+        if document is None:
+            raise Exception(f"Unable to find Document {document_id}")
+
+        if document["data"]["user"] != self.user:
+            raise Exception(f"User {self.user} is not allowed to update Document {document_id}.")
+
+        try:
+            result = self.db_client.update_document(
+                {
+                    "_id": _id,
+                    "data": updated_data.model_dump(by_alias=True, mode="json"), 
+                },
+                merge=True,
+                keep_none=True,
+            )
+
+            print(result)
         except Exception as e:
-            print(e)
-            raise Exception(e)
+            raise Exception("Not able to Update the Document due to: ", e)
+
+        # TODO: Figure out what **result** actually contains
+
+        return f"Updated document: {document_id}"
+
+        # cursor = self.db_client.aql.execute(f"""
+        #     FOR doc IN @@collection
+        #         FILTER doc._key == @document_id AND doc.data.user == @user
+        #         LIMIT 1
+        #         UPDATE doc WITH @body IN @@collection
+        #         OPTIONS {{ keepNull: @keep_none, mergeObjects: @merge }}
+        #         RETURN True
+        # """,
+        #     bind_vars={"@collection": self.collection.name, "document_id": document_id, "user": self.user, "body": {"data": updated_data.model_dump(by_alias=True, mode="json"), "first_query": first_query}, "keep_none": True, "merge": True}
+        # )
+        # if not cursor.empty():
+        #     return "Updated document : {}".format(document_id)
+        # else:
+        #     raise Exception("Not able to Update the Document")
+
+        # except Exception as e:
+        #     print(e)
+        #     raise Exception(e)
 
     def get_all_documents_of_user(self) -> list[dict]:
         """Retrieves all documents of a specific user from the collection.

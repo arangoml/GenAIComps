@@ -1,7 +1,3 @@
-# # Copyright (C) 2024 Intel Corporation
-# # SPDX-License-Identifier: Apache-2.0
-
-
 from config import COLLECTION_NAME, ARANGODB_USERNAME, ARANGODB_PASSWORD, DB_NAME
 from arango_conn import ArangoClient
 from pydantic import BaseModel
