@@ -1,7 +1,3 @@
-# Copyright (C) 2024 Intel Corporation
-# SPDX-License-Identifier: Apache-2.0
-
-# import motor.motor_asyncio as motor
 from arango import ArangoClient as PythonArangoClient
 from config import DB_NAME, ARANGODB_HOST, ARANGODB_PORT, ARANGODB_PASSWORD, ARANGODB_USERNAME
 
