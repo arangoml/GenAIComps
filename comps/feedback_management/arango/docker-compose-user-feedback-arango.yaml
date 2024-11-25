@@ -12,9 +12,12 @@ services:
       - arangodb_apps:/var/lib/arangodb3-apps
     networks:
       - feedback_network
+    restart: unless-stopped
 
   feedbackmanagement:
-    image: opea/feedback-arango-server:latest
+    build:
+      context: ../../..
+      dockerfile: comps/feedback_management/arango/Dockerfile
     container_name: feedbackmanagement-server
     ports:
       - "6016:6016"
