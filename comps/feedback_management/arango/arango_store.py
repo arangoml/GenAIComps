@@ -2,7 +2,6 @@ from config import COLLECTION_NAME
 from arango_conn import ArangoClient
 from pydantic import BaseModel
 
-
 class FeedbackStore:
 
     def __init__(
@@ -12,8 +11,19 @@ class FeedbackStore:
         self.user = user
 
     def initialize_storage(self) -> None:
-        self.db_client = ArangoClient.get_db_client()
-        self.collection = self.db_client[COLLECTION_NAME]
+        try:
+            self.db_client = ArangoClient.get_db_client()
+            if not self.db_client.has_collection(COLLECTION_NAME):
+                self.collection = self.db_client.create_collection(COLLECTION_NAME)
+            else:
+                self.collection = self.db_client.collection(COLLECTION_NAME)
+            
+            print(f"Successfully initialized storage with collection: {COLLECTION_NAME}")
+                
+        except Exception as e:
+            print(f"Failed to initialize storage: {e}, url: {ArangoClient.conn_url}, collection: {COLLECTION_NAME}")
+            raise Exception(f"Storage initialization failed: {e}, url: {ArangoClient.conn_url}, collection: {COLLECTION_NAME}")
+
 
     def save_feedback(self, feedback_data: BaseModel) -> str:
         """Stores a new feedback data into the storage.
@@ -29,11 +39,11 @@ class FeedbackStore:
         """
         try:
             model_dump = feedback_data.model_dump(by_alias=True, mode="json", exclude={"feedback_id"})
-            model_dump["_id"] = f"{self.collection.name}/{feedback_data.feedback_id}"
+            #model_dump["_key"] = feedback_data.feedback_id
 
             inserted_feedback_data = self.collection.insert(model_dump)
             
-            feedback_id = str(inserted_feedback_data.inserted_id)
+            feedback_id = str(inserted_feedback_data["_key"])
             
             return feedback_id
 
@@ -41,7 +51,7 @@ class FeedbackStore:
             print(e)
             raise Exception(e)
 
-    def update_feedback(self, feedback_data) -> bool:
+    def update_feedback(self, feedback_data: BaseModel) -> bool:
         """Update a feedback data in the collection with given id.
 
         Args:
@@ -51,8 +61,7 @@ class FeedbackStore:
         Returns:
             bool: True if the data updated successfully, False otherwise.
         """
-        _key = feedback_data.feedback_id 
-
+        _key = feedback_data.feedback_id
         document = self.collection.get(_key)
 
         if document is None:
@@ -70,7 +79,7 @@ class FeedbackStore:
                 keep_none=False,
             )
 
-            print(result)
+            return True
         except Exception as e:
             print(e)
             raise Exception("Not able to update the data.")
@@ -93,7 +102,7 @@ class FeedbackStore:
                     RETURN UNSET(doc, "feedback_data")
             """
 
-            cursor = self.db_client.aql.execute(cursor, bind_vars={"@@collection": self.collection.name, "user": self.user})
+            cursor = self.db_client.aql.execute(cursor, bind_vars={"@collection": self.collection.name, "user": self.user})
 
             for document in cursor:
                 document["feedback_id"] = str(document["_key"])
@@ -106,7 +115,7 @@ class FeedbackStore:
             print(e)
             raise Exception(e)
 
-    def get_feedback_by_id(self, feedback_id) -> dict | None:
+    def get_feedback_by_id(self, feedback_id: BaseModel) -> dict | None:
         """Retrieves a user feedback data from the collection based on the given feedback ID.
 
         Args:
@@ -130,7 +139,7 @@ class FeedbackStore:
 
         return response
 
-    def delete_feedback(self, feedback_id) -> bool:
+    def delete_feedback(self, feedback_id: BaseModel) -> bool:
         """Delete a feedback data from collection by given feedback_id.
 
         Args:

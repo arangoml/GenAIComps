@@ -46,7 +46,7 @@ docker build -t opea/chathistory-arango-server:latest --build-arg https_proxy=$h
 - Run Feedback Management microservice
 
   ```bash
-  docker run -p 6016:6016 \  
+  docker run -d -p 6016:6016 \  
   --network feedbackmanagement-network \    
   -e http_proxy=$http_proxy \
   -e https_proxy=$https_proxy \
