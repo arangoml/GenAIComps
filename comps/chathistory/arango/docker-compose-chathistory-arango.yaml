@@ -4,7 +4,6 @@ networks:
   chathistory_network:
     name: chathistory-network
     driver: bridge
-    external: true
 
 services:
   arangodb:
@@ -19,7 +18,7 @@ services:
       - arangodb_apps:/var/lib/arangodb3-apps
     networks:
       - chathistory_network
-
+    restart: unless-stopped
   chathistory:
     build:
       context: ../../../
