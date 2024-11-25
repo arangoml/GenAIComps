@@ -1,0 +1,3 @@
+python-arango
+arango
+pydantic

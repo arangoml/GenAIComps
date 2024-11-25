@@ -1,0 +1,29 @@
+version: "3"
+services:
+  arango:
+    image: arangodb/arangodb:latest
+    container_name: arango
+    ports:
+      - 8529:8529
+    environment:
+      http_proxy: ${http_proxy}
+      https_proxy: ${https_proxy}
+      no_proxy: ${no_proxy}
+      ARANGO_ROOT_PASSWORD: ${ARANGO_ROOT_PASSWORD}
+
+  prompt_registry-arango:
+    image: opea/prompt_registry-arango-server:latest
+    container_name: prompt_registry-arango-server
+    ports:
+      - "6018:6018"
+    ipc: host
+    environment:
+      http_proxy: ${http_proxy}
+      https_proxy: ${https_proxy}
+      no_proxy: ${no_proxy}
+      ARANGODB_HOST: arango
+      ARANGODB_PORT: ${ARANGODB_PORT}
+      OPEA_DB_NAME: ${OPEA_DB_NAME}
+      COLLECTION_NAME: ${COLLECTION_NAME}
+    restart: unless-stopped
+
