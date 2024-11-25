@@ -1,0 +1,50 @@
+
+# Copyright (C) 2024 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+
+version: "3.8"
+services:
+  arangodb:
+    image: jbajic/arangodb-arm:vector-index-preview
+    container_name: arango-vector
+    environment:
+      - ARANGO_ROOT_PASSWORD=test
+    ports:
+      - "8529:8529"
+    volumes:
+      - arangodb_data:/var/lib/arangodb3
+      - arangodb_apps:/var/lib/arangodb3-apps
+    networks:
+      - feedback_network
+    restart: unless-stopped
+
+  feedbackmanagement:
+    build:
+      context: ../../..
+      dockerfile: comps/feedback_management/arango/Dockerfile
+    container_name: feedbackmanagement-server
+    ports:
+      - "6016:6016"
+    environment:
+      http_proxy: ${http_proxy}
+      https_proxy: ${https_proxy}
+      no_proxy: ${no_proxy}
+      ARANGODB_HOST: arangodb
+      ARANGODB_PORT: 8529
+      DB_NAME: ${DB_NAME:-OPEA}
+      COLLECTION_NAME: ${COLLECTION_NAME:-Feedback}
+      ARANGODB_USERNAME: root
+      ARANGODB_PASSWORD: test
+    depends_on:
+      - arangodb
+    networks:
+      - feedback_network
+    restart: unless-stopped
+
+volumes:
+  arangodb_data:
+  arangodb_apps:
+
+networks:
+  feedback_network:
+    driver: bridge

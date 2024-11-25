@@ -1,15 +1,18 @@
+# Copyright (C) 2024 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+
 import os
 from typing import Annotated, Optional
 
-from fastapi import HTTPException
 from arango_store import FeedbackStore
+from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
 from comps import CustomLogger
 from comps.cores.mega.micro_service import opea_microservices, register_microservice
 from comps.cores.proto.api_protocol import ChatCompletionRequest
 
-logger = CustomLogger("feedback_mongo")
+logger = CustomLogger("feedback_arango")
 logflag = os.getenv("LOGFLAG", False)
 
 
@@ -56,7 +59,7 @@ class FeedbackId(BaseModel):
 
 
 @register_microservice(
-    name="opea_service@feedback_mongo",
+    name="opea_service@feedback_arango",
     endpoint="/v1/feedback/create",
     host="0.0.0.0",
     input_datatype=FeedbackData,
@@ -92,7 +95,7 @@ async def create_feedback_data(feedback: ChatFeedback):
 
 
 @register_microservice(
-    name="opea_service@feedback_mongo",
+    name="opea_service@feedback_arango",
     endpoint="/v1/feedback/get",
     host="0.0.0.0",
     input_datatype=FeedbackId,
@@ -129,7 +132,7 @@ async def get_feedback(feedback: FeedbackId):
 
 
 @register_microservice(
-    name="opea_service@feedback_mongo",
+    name="opea_service@feedback_arango",
     endpoint="/v1/feedback/delete",
     host="0.0.0.0",
     input_datatype=FeedbackId,
@@ -166,5 +169,4 @@ async def delete_feedback(feedback: FeedbackId):
 
 
 if __name__ == "__main__":
-    opea_microservices["opea_service@feedback_mongo"].start()
-    
+    opea_microservices["opea_service@feedback_arango"].start()
