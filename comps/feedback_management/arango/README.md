@@ -7,12 +7,13 @@ This README provides setup guides and all the necessary information about the Fe
 ## Setup Environment Variables
 
 ```bash
-export ARANGODB_HOST=${ARANGODB_HOST}
-export ARANGODB_PORT=${ARANGODB_PORT}
-export ARANGODB_USERNAME=${ARANGODB_USERNAME}
-export ARANGODB_PASSWORD=${ARANGODB_PASSWORD}
+export ARANGO_HOST=${ARANGO_HOST}
+export ARANGO_PORT=${ARANGO_PORT}
+export ARANGO_USERNAME=${ARANGO_USERNAME}
+export ARANGO_PASSWORD=${ARANGO_PASSWORD}
 export DB_NAME=${DB_NAME}
 export COLLECTION_NAME=${COLLECTION_NAME}
+export PROTOCOL=${PROTOCOL}
 export PYTHONPATH={Path to base of directory}
 ```
 
@@ -22,15 +23,9 @@ export PYTHONPATH={Path to base of directory}
 
 ### Build Docker Image
 
-### Create Docker Network
-
 ```bash
-docker network create feedbackmanagement-network
-```
-
-```bash
-cd ../../../../
-docker build -t opea/chathistory-arango-server:latest --build-arg https_proxy=$https_proxy --build-arg http_proxy=$http_proxy -f comps/chathistory/arango/Dockerfile .
+cd ~/GenAIComps
+docker build -t opea/feedbackmanagement-arango-server:latest --build-arg https_proxy=$https_proxy --build-arg http_proxy=$http_proxy -f comps/feedback_management/arango/Dockerfile .
 ```
 
 ### Run Docker with CLI
@@ -38,25 +33,24 @@ docker build -t opea/chathistory-arango-server:latest --build-arg https_proxy=$h
 - Run ArangoDB image container
 
   ```bash
-  docker run -d -p 8529:8529 --network=feedbackmanagement-network --name=arango arangodb/arangodb:latest
-
-  docker start arango
+  docker run -d -p 8529:8529 --name=arango arangodb/arangodb:latest
   ```
 
 - Run Feedback Management microservice
 
   ```bash
-  docker run -d -p 6016:6016 \  
-  --network feedbackmanagement-network \    
+  docker run -d -p 6016:6016 \
+  --name="feedbackmanagement-arango-server" \  
   -e http_proxy=$http_proxy \
   -e https_proxy=$https_proxy \
   -e no_proxy=$no_proxy \
-  -e ARANGODB_HOST=host.docker.internal \
-  -e ARANGODB_PORT=${ARANGODB_PORT} \
+  -e ARANGO_HOST=${ARANGO_HOST} \
+  -e ARANGO_PORT=${ARANGO_PORT} \
+  -e ARANGO_USERNAME=${ARANGO_USERNAME} \
+  -e ARANGO_PASSWORD=${ARANGO_PASSWORD} \
   -e DB_NAME=${DB_NAME} \
+  -e PROTOCOL=${PROTOCOL} \
   -e COLLECTION_NAME=${COLLECTION_NAME} \
-  -e ARANGODB_USERNAME=${ARANGODB_USERNAME} \
-  -e ARANGODB_PASSWORD=${ARANGODB_PASSWORD} \
   opea/feedbackmanagement-arango-server:latest
 
   ```
@@ -102,8 +96,8 @@ The Feedback Management microservice exposes the following API endpoints:
     }}'
 
 
-  # Take note that chat_id here would be the id get from chathistory_arango service
-  # If you do not wish to maintain chat history via chathistory_arango service, you may generate some random uuid for it or just leave it empty.
+  # Take note that chat_id here would be the id get from feedback_arango service
+  # If you do not wish to maintain chat history via feedback_arango service, you may generate some random uuid for it or just leave it empty.
   ```
 
 - Update feedback data by feedback_id
