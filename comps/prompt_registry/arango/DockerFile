@@ -23,19 +23,8 @@ RUN pip install --no-cache-dir --upgrade pip setuptools && \
     pip install --no-cache-dir -r /home/user/comps/prompt_registry/arango/requirements.txt && \
     pip install --no-cache-dir -r /home/user/requirements.txt
 
-ENV PYTHONPATH=/home/user
+ENV PYTHONPATH=$PYTHONPATH:/home/user
 
 WORKDIR /home/user/comps/prompt_registry/arango
 
 ENTRYPOINT ["python", "prompt.py"]
-    
-# # Copy the Anaconda Environment
-# COPY /opt/anaconda3/envs/ArangoDB /opt/anaconda3/envs/ArangoDB
-
-# # Set PYTHONPATH to Point to the Anaconda Environment
-# ENV PYTHONPATH=$PYTHONPATH:/opt/anaconda3/envs/ArangoDB/lib/python3.11/site-packages
-
-# # Other Dockerfile Instructions
-# COPY comps /home/user/comps
-# WORKDIR /home/user/comps/prompt_registry/arango
-# ENTRYPOINT ["python", "prompt.py"]

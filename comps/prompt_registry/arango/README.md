@@ -1,4 +1,4 @@
-# 🧾 Prompt Registry Microservice with MongoDB
+# 🧾 Prompt Registry Microservice with ArangoDB
 
 This README provides setup guides and all the necessary information about the Prompt Registry microservice with ArangoDB database.
 
@@ -7,10 +7,11 @@ This README provides setup guides and all the necessary information about the Pr
 ## Setup Environment Variables
 
 ```bash
-export http_proxy=${your_http_proxy} 
-export https_proxy=${your_http_proxy}
-export ARANGODB_PORT=${ARANGODB_PORT} 
-export OPEA_DB_NAME=${OPEA_DB_NAME}
+export ARANGO_HOST=${ARANGO_HOST}
+export ARANGO_PORT=${ARANGO_PORT}
+export ARANGO_USERNAME=${ARANGO_USERNAME}
+export ARANGO_PASSWORD=${ARANGO_PASSWORD}
+export DB_NAME=${DB_NAME}
 export COLLECTION_NAME=${COLLECTION_NAME}
 ```
 
@@ -22,21 +23,40 @@ export COLLECTION_NAME=${COLLECTION_NAME}
 
 ```bash
 cd ~/GenAIComps
-docker build -t opea/prompt_registry-arango-server:latest -f comps/prompt_registry/arango/DockerFile .
+docker build -t opea/promptregistry-arango-server:latest --build-arg https_proxy=$https_proxy --build-arg http_proxy=$http_proxy -f comps/prompt_registry/arango/Dockerfile .
 ```
 
 ### Run Docker with CLI
 
-- Run Aranago DB and prompt_registry-arango conatiner using the following command
-```bash
-docker-compose -f comps/prompt_registry/arango/docker-compose-prompt-registry-arango.yaml up
-```
+
+- Run ArangoDB image container
+
+  ```bash
+  docker run -d -p 8529:8529 --name=arango arangodb/arangodb:latest
+  ```
+
+- Run Prompt Registry microservice
+
+  ```bash
+  docker run -d -p 6018:6018 \
+  --name="promptregistry-arango-server" \  
+  -e http_proxy=$http_proxy \
+  -e https_proxy=$https_proxy \
+  -e no_proxy=$no_proxy \
+  -e ARANGO_HOST=${ARANGO_HOST} \
+  -e ARANGO_PORT=${ARANGO_PORT} \
+  -e ARANGO_USERNAME=${ARANGO_USERNAME} \
+  -e ARANGO_PASSWORD=${ARANGO_PASSWORD} \
+  -e DB_NAME=${DB_NAME} \
+  -e COLLECTION_NAME=${COLLECTION_NAME} \
+  opea/promptregistry-arango-server:latest
+
+  ```
 
 ---
 
 ### ✅ Invoke Microservice
 
-NOTE: please replace ${host_ip} with IP address of the host machine running prompt registry service
 The Prompt Registry microservice exposes the following API endpoints:
 
 - Save prompt

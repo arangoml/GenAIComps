@@ -1,3 +1,6 @@
+# Copyright (C) 2024 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+
 version: "3"
 services:
   arango:
@@ -11,9 +14,9 @@ services:
       no_proxy: ${no_proxy}
       ARANGO_ROOT_PASSWORD: ${ARANGO_ROOT_PASSWORD}
 
-  prompt_registry-arango:
-    image: opea/prompt_registry-arango-server:latest
-    container_name: prompt_registry-arango-server
+  promptregistry-arango:
+    image: opea/promptregistry-arango:latest
+    container_name: promptregistry-arango-server
     ports:
       - "6018:6018"
     ipc: host
@@ -21,9 +24,14 @@ services:
       http_proxy: ${http_proxy}
       https_proxy: ${https_proxy}
       no_proxy: ${no_proxy}
-      ARANGODB_HOST: arango
-      ARANGODB_PORT: ${ARANGODB_PORT}
-      OPEA_DB_NAME: ${OPEA_DB_NAME}
+      ARANGO_HOST: ${ARANGO_HOST}
+      ARANGO_PORT: ${ARANGO_PORT}
+      ARANGO_USERNAME: ${ARANGO_USERNAME}
+      ARANGO_PASSWORD: ${ARANGO_PASSWORD}
+      DB_NAME: ${DB_NAME}
       COLLECTION_NAME: ${COLLECTION_NAME}
     restart: unless-stopped
 
+networks:
+  default:
+    driver: bridge

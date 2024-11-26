@@ -3,14 +3,6 @@
 import os
 from typing import Optional
 
-# import bson.errors as BsonError
-# from bson.objectid import ObjectId
-from config import COLLECTION_NAME
-from arango_conn import ArangoClient
-from pydantic import BaseModel
-import asyncio
-import json
-
 from arango_store import PromptStore
 from pydantic import BaseModel
 
@@ -20,7 +12,6 @@ from comps.cores.mega.micro_service import opea_microservices, register_microser
 logger = CustomLogger("prompt_arango")
 logflag = os.getenv("LOGFLAG", False)
 
-# model_config['protected_namespaces'] = ()
 
 class PromptCreate(BaseModel):
     """This class represents the data model for creating and storing a new prompt in the database.
@@ -65,24 +56,21 @@ async def create_prompt(prompt: PromptCreate):
     """
     if logflag:
         logger.info(prompt)
-    
+
     try:
         prompt_store = PromptStore(prompt.user)
         prompt_store.initialize_storage()
-        response = await prompt_store.save_prompt(prompt)
+        response = prompt_store.save_prompt(prompt)
         if logflag:
             logger.info(response)
-       
+
         return response
 
     except Exception as error:
         logger.error(f"An error occurred: {str(error)}")
         raise error
 
-# prompt_data = PromptCreate(prompt_text="What is the capital of France?", user="example_user")
 
-# create_prompt(prompt_data)
-# asyncio.run(create_prompt(prompt_data))
 @register_microservice(
     name="opea_service@prompt_arango",
     endpoint="/v1/prompt/get",
@@ -102,17 +90,16 @@ async def get_prompt(prompt: PromptId):
     if logflag:
         logger.info(prompt)
     try:
-       
+
         prompt_store = PromptStore(prompt.user)
-        logger.debug("initialize prompt storage")
         prompt_store.initialize_storage()
-       
+
         if prompt.prompt_id is not None:
-            response = await prompt_store.get_user_prompt_by_id(prompt.prompt_id)
-        # elif prompt.prompt_text:
-        #     response = await prompt_store.prompt_search(prompt.prompt_text)
+            response = prompt_store.get_user_prompt_by_id(prompt.prompt_id)
+        elif prompt.prompt_text:
+            response = prompt_store.prompt_search(prompt.prompt_text)
         else:
-            response = await prompt_store.get_all_prompt_of_user()
+            response = prompt_store.get_all_prompt_of_user()
         if logflag:
             logger.info(response)
         return response
@@ -120,13 +107,7 @@ async def get_prompt(prompt: PromptId):
     except Exception as error:
         logger.error(f"An error occurred: {str(error)}")
         raise error
- 
-# prompt = PromptId(user="example_user", prompt_id="Prompt/test")
 
-# prompt = PromptId(user="example_user")
-
-# x=asyncio.run(get_prompt(prompt))
-# print(x)
 
 @register_microservice(
     name="opea_service@prompt_arango",
@@ -152,7 +133,7 @@ async def delete_prompt(prompt: PromptId):
         if prompt.prompt_id is None:
             raise Exception("Prompt id is required.")
         else:
-            response = await prompt_store.delete_prompt(prompt.prompt_id)
+            response = prompt_store.delete_prompt(prompt.prompt_id)
         if logflag:
             logger.info(response)
         return response
@@ -160,12 +141,7 @@ async def delete_prompt(prompt: PromptId):
     except Exception as error:
         logger.error(f"An error occurred: {str(error)}")
         raise error
-    
 
-# prompt = PromptId(user="example_user", prompt_id="Prompt/test")
-
-# x=asyncio.run(delete_prompt(prompt))
-# print(x)
 
 if __name__ == "__main__":
     opea_microservices["opea_service@prompt_arango"].start()

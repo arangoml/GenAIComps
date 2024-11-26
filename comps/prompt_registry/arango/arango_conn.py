@@ -1,32 +1,32 @@
-import os
+# Copyright (C) 2024 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+
 from arango import ArangoClient as PythonArangoClient
 from arango.database import StandardDatabase
-from config import DB_NAME, ARANGODB_HOST, ARANGODB_PORT, ARANGODB_PASSWORD, ARANGODB_USERNAME,OPEA_DB_NAME
-from comps import CustomLogger
+from config import ARANGO_HOST, ARANGO_PASSWORD, ARANGO_PORT, ARANGO_USERNAME, DB_NAME
 
-logger = CustomLogger("arango_conn")
-logflag = os.getenv("LOGFLAG", False)
 
 class ArangoClient:
-    conn_url = f"http://{ARANGODB_HOST}:{ARANGODB_PORT}/"
+    conn_url = f"arangodb://{ARANGO_HOST}:{ARANGO_PORT}/"
 
     @staticmethod
     def get_db_client() -> StandardDatabase:
         try:
+            # Create client
             client = PythonArangoClient(hosts=ArangoClient.conn_url)
-            logger.debug("starting connection to db with name:{name}, username:{username}".format(name=DB_NAME, username=ARANGODB_USERNAME))
-            db = client.db(DB_NAME, username=ARANGODB_USERNAME, password=ARANGODB_PASSWORD, verify=True)
-            logger.debug("successfully connected to db with name:{name}, username:{username}".format(name=DB_NAME, username=ARANGODB_USERNAME))
-            if not db.has_database(OPEA_DB_NAME):
-                logger.debug("No OPEA DB detected, so creating one")
-                db.create_database(OPEA_DB_NAME)
-                logger.debug("Created OPEA DB")
-            
-            db_opea = client.db(OPEA_DB_NAME, username=ARANGODB_USERNAME, password=ARANGODB_PASSWORD, verify=True)
-            logger.debug("successfully connected to db with name:{name}, username:{username}".format(name=DB_NAME, username=ARANGODB_USERNAME))
 
-            return db_opea
+            # First connect to _system database
+            sys_db = client.db("_system", username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
 
-        except Exception as error:
-            logger.error(f"An error occurred: {str(error)}")
-            raise error
+            # Create target database if it doesn't exist
+            if not sys_db.has_database(DB_NAME):
+                sys_db.create_database(DB_NAME)
+
+            # Now connect to the target database
+            db = client.db(DB_NAME, username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
+
+            return db
+
+        except Exception as e:
+            print(e)
+            raise e

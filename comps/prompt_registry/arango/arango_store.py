@@ -1,11 +1,18 @@
+# Copyright (C) 2024 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+
 import os
-from config import COLLECTION_NAME
+
 from arango_conn import ArangoClient
+from config import COLLECTION_NAME
+from prompt import PromptCreate
 from pydantic import BaseModel
+
 from comps import CustomLogger
 
 logger = CustomLogger("arango_store")
 logflag = os.getenv("LOGFLAG", False)
+
 
 class PromptStore:
 
@@ -16,19 +23,14 @@ class PromptStore:
         self.user = user
 
     def initialize_storage(self) -> None:
-        logger.debug("get arango db client")
         self.db_client = ArangoClient.get_db_client()
-      
 
-        if self.db_client.has_collection(COLLECTION_NAME):
-            self.collection = self.db_client.collection(COLLECTION_NAME)
-        else:
-            self.collection = self.db_client.create_collection(COLLECTION_NAME)
-        
+        if not self.db_client.has_collection(COLLECTION_NAME):
+            self.db_client.create_collection(COLLECTION_NAME)
+
         self.collection = self.db_client.collection(COLLECTION_NAME)
 
-    async def save_prompt(self, prompt):
-
+    def save_prompt(self, prompt: PromptCreate):
         """Stores a new prompt into the storage.
 
         Args:
@@ -41,17 +43,19 @@ class PromptStore:
             Exception: If an error occurs while storing the prompt.
         """
         try:
-            insert_prompt = {'user': prompt.user, 'content': prompt.prompt_text }
-           
-            inserted_prompt_metadata = self.collection.insert(insert_prompt)
-            if  inserted_prompt_metadata and inserted_prompt_metadata.get('_id'):
-                return inserted_prompt_metadata['_id']
+            model_dump = prompt.model_dump(by_alias=True, mode="json", exclude={"id"})
 
-        except Exception as error:
-            logger.error(f"An error occurred: {str(error)}")
-            raise error
-        
-    async def get_all_prompt_of_user(self) -> list[dict]:
+            inserted_prompt_data = self.collection.insert(model_dump)
+
+            prompt_id = str(inserted_prompt_data["_key"])
+
+            return prompt_id
+
+        except Exception as e:
+            print(e)
+            raise Exception(e)
+
+    def get_all_prompt_of_user(self) -> list[dict]:
         """Retrieves all prompts of a user from the collection.
 
         Returns:
@@ -61,18 +65,35 @@ class PromptStore:
             Exception: If there is an error while retrieving data.
         """
         try:
-            prompt_list: list = []
-            cursor=self.collection.find({'user': self.user})
+            prompt_data_list: list = []
+
+            # TODO: Clarify if we actually want to omit the `data` field.
+            # Implemented using MongoDB Prompt Registry as a reference.
+            cursor = """
+                FOR doc IN @@collection
+                    FILTER doc.chat_data.user == @user
+                    RETURN UNSET(doc, "data")
+            """
+
+            cursor = self.db_client.aql.execute(
+                cursor, bind_vars={"@collection": self.collection.name, "user": self.user}
+            )
 
             for document in cursor:
-                prompt_list.append(document)
-            return prompt_list
+                document["id"] = str(document["_key"])
+                del document["_id"]
+                del document["_key"]
+                del document["_rev"]
 
-        except Exception as error:
-            logger.error(f"An error occurred: {str(error)}")
-            raise error
+                prompt_data_list.append(document)
 
-    async def get_user_prompt_by_id(self, prompt_id) -> dict | None:
+            return prompt_data_list
+
+        except Exception as e:
+            print(e)
+            raise Exception(e)
+
+    def get_user_prompt_by_id(self, prompt_id: str) -> dict | None:
         """Retrieves a user prompt from the collection based on the given prompt ID.
 
         Args:
@@ -82,21 +103,24 @@ class PromptStore:
             dict | None: The user prompt if found, None otherwise.
 
         Raises:
-            Exception: If there is an error while retrieving data.
+            KeyError: If document with ID is not found.
+            Exception: If the user does not match with the document user.
         """
-        try:
-           
-            response: dict | None =self.collection.get({'_id': str(prompt_id)})
-            logger.info(response)
-            if response:
-                return response["content"]
-            return None
+        response = self.collection.get(prompt_id)
 
-        except Exception as error:
-            logger.error(f"An error occurred: {str(error)}")
-            raise error
+        if response is None:
+            raise KeyError(f"Prompt with ID: {prompt_id} not found.")
 
-    async def prompt_search(self, keyword) -> list | None:
+        if response["user"] != self.user:
+            raise Exception(f"User mismatch. Prompt with ID: {prompt_id} does not belong to user: {self.user}")
+
+        del response["_id"]
+        del response["_key"]
+        del response["_rev"]
+
+        return response
+
+    def prompt_search(self, keyword: str) -> list | None:
         """Retrieves prompt from the collection based on keyword provided.
 
         Args:
@@ -109,34 +133,44 @@ class PromptStore:
             Exception: If there is an error while searching data.
         """
         try:
-            # Create an ArangoSearch view.
-            self.db_client.create_arangosearch_view(
-                    name='arangosearch_view',
-                    properties={'cleanupIntervalStep': 0}
-                )
             # Create a text index if not already created
-            self.collection.create_index([("$**", "text")])
+            if not any([True for index in self.collection.indexes() if index["name"] == "prompt_text_index"]):
+                self.collection.add_inverted_index(
+                    fields=["prompt_text"],
+                    name="prompt_text_index",
+                    # TODO: add more kwargs if needed
+                )
+
+            query = """
+                FOR doc IN @@collection
+                OPTIONS { indexHint: "prompt_text_index", forceIndexHint: true }
+                    FILTER @keyword IN doc.prompt_text
+                    LIMIT 5
+                    RETURN doc
+            """
+
             # Perform text search
-            results = self.collection.find({"$text": {"$search": keyword}}, {"score": {"$meta": "textScore"}})
-            sorted_results = results.sort([("score", {"$meta": "textScore"})])
+            cursor = self.db_client.aql.execute(
+                query,
+                bind_vars={"@collection": self.collection.name, "keyword": keyword},
+            )
 
-            # Return a list of top 5 most relevant data
-            relevant_data = await sorted_results.to_list(length=5)
+            serialized_data = []
+            for doc in cursor:
+                doc["id"] = str(doc["_key"])
+                del doc["_id"]
+                del doc["_key"]
+                del doc["_rev"]
 
-            # Serialize data and return
-            serialized_data = [
-                {"id": str(doc["_id"]), "prompt_text": doc["prompt_text"], "user": doc["user"], "score": doc["score"]}
-                for doc in relevant_data
-            ]
+                serialized_data.append(doc)
 
             return serialized_data
 
-        except Exception as error:
-            logger.error(f"An error occurred: {str(error)}")
-            raise error
-        
+        except Exception as e:
+            print(e)
+            raise Exception(e)
 
-    async def delete_prompt(self, prompt_id) -> bool:
+    def delete_prompt(self, prompt_id: str) -> bool:
         """Delete a prompt from collection by given prompt_id.
 
         Args:
@@ -146,14 +180,23 @@ class PromptStore:
             bool: True if prompt is successfully deleted, False otherwise.
 
         Raises:
-            KeyError: If the provided prompt_id is invalid:
+            KeyError: If the provided feedback_id is invalid:
+            Exception: If the user does not match with the document user.
             Exception: If any errors occurs during delete process.
         """
-        try:
-            
-            result : dict | None = self.collection.delete(prompt_id)
-            return result
+        response = self.collection.get(prompt_id)
 
-        except Exception as error:
-            logger.error(f"An error occurred: {str(error)}")
-            raise error
+        if response is None:
+            raise KeyError(f"Feedback with ID: {prompt_id} not found.")
+
+        if response["user"] != self.user:
+            raise Exception(f"User mismatch. Feedback with ID: {prompt_id} does not belong to user: {self.user}")
+
+        try:
+            response = self.collection.delete(prompt_id)
+            print(f"Deleted document: {prompt_id} !")
+
+            return True
+        except Exception as e:
+            print(e)
+            raise Exception("Not able to delete the data.")
