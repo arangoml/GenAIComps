@@ -1,8 +1,8 @@
 ﻿import os
 from typing import Optional
 
-from fastapi import HTTPException
 from arango_store import DocumentStore
+from fastapi import HTTPException
 from pydantic import BaseModel
 
 from comps import CustomLogger
@@ -144,4 +144,3 @@ async def delete_documents(document: ChatId):
 
 if __name__ == "__main__":
     opea_microservices["opea_service@chathistory_arango"].start()
-    

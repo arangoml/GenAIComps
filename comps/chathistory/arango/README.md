@@ -6,25 +6,21 @@ This README provides setup guides and all the necessary information about the Ch
 
 ## Setup Environment Variables
 
+See `config.py` for default values.
+
 ```bash
-export ARANGODB_HOST=${ARANGODB_HOST}
-export ARANGODB_PORT=${ARANGODB_PORT}
-export ARANGODB_USERNAME=${ARANGODB_USERNAME}
-export ARANGODB_PASSWORD=${ARANGODB_PASSWORD}
+export ARANGO_HOST=${ARANGO_HOST}
+export ARANGO_PORT=${ARANGO_PORT}
+export ARANGO_PROTOCOL=${ARANGO_PROTOCOL}
+export ARANGO_USERNAME=${ARANGO_USERNAME}
+export ARANGO_PASSWORD=${ARANGO_PASSWORD}
 export DB_NAME=${DB_NAME}
 export COLLECTION_NAME=${COLLECTION_NAME}
-export PYTHONPATH={Path to base of directory}
 ```
 
 ---
 
 ## 🚀Start Microservice with Docker
-
-### Create Docker Network
-
-```bash
-docker network create chathistory-network
-``` 
 
 ### Build Docker Image
 
@@ -38,27 +34,24 @@ docker build -t opea/chathistory-arango-server:latest --build-arg https_proxy=$h
 - Run ArangoDB image container
 
   ```bash
-  docker run -d -p 8529:8529 --network=chathistory-network --name=arango arangodb/arangodb:latest
-
-  docker start arango
+  docker run -d -p 8529:8529 --name=arango arangodb/arangodb:latest
   ```
 
 - Run the Chat History microservice
 
   ```bash
   docker run -p 6012:6012 \  
-  --network chathistory-network \    
   -e http_proxy=$http_proxy \
   -e https_proxy=$https_proxy \
   -e no_proxy=$no_proxy \
   -e ARANGODB_HOST=host.docker.internal \
   -e ARANGODB_PORT=${ARANGODB_PORT} \
-  -e DB_NAME=${DB_NAME} \
-  -e COLLECTION_NAME=${COLLECTION_NAME} \
+  -e ARANGODB_PROTOCOL=${ARANGODB_PROTOCOL} \
   -e ARANGODB_USERNAME=${ARANGODB_USERNAME} \
   -e ARANGODB_PASSWORD=${ARANGODB_PASSWORD} \
+  -e DB_NAME=${DB_NAME} \
+  -e COLLECTION_NAME=${COLLECTION_NAME} \
   opea/chathistory-arango-server:latest
-
   ```
 
 ---

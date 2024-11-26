@@ -1,6 +1,9 @@
-from config import COLLECTION_NAME
+from typing import Any
+
 from arango_conn import ArangoClient
+from config import COLLECTION_NAME
 from pydantic import BaseModel
+
 
 class DocumentStore:
 
@@ -11,22 +14,12 @@ class DocumentStore:
         self.user = user
 
     def initialize_storage(self) -> None:
-        try:
-            self.db_client = ArangoClient.get_db_client()
-            # Create collection if it doesn't exist
-            print(COLLECTION_NAME)
-            if not self.db_client.has_collection(COLLECTION_NAME):
-                print("Creating collection")
-                self.collection = self.db_client.create_collection(COLLECTION_NAME)
-            else:
-                print("Collection already exists")
-                self.collection = self.db_client.collection(COLLECTION_NAME)
-            
-            print(f"Successfully initialized storage with collection: {COLLECTION_NAME}")
-            
-        except Exception as e:
-            print(f"Failed to initialize storage: {e}, url: {ArangoClient.conn_url}, collection: {COLLECTION_NAME}")
-            raise Exception(f"Storage initialization failed: {e}, url: {ArangoClient.conn_url}, collection: {COLLECTION_NAME}")
+        self.db_client = ArangoClient.get_db_client()
+
+        if not self.db_client.has_collection(COLLECTION_NAME):
+            self.db_client.create_collection(COLLECTION_NAME)
+
+        self.collection = self.db_client.collection(COLLECTION_NAME)
 
     def save_document(self, document: BaseModel) -> str:
         """Stores a new document into the storage.
@@ -41,17 +34,19 @@ class DocumentStore:
             Exception: If an error occurs while storing the document.
         """
         try:
-            inserted_conv = self.collection.insert(
-                document.model_dump(by_alias=True, mode="json", exclude={"id"})
-            )
-            document_id = str(inserted_conv["_key"])
+            model_dump = document.model_dump(by_alias=True, mode="json", exclude={"id"})
+
+            inserted_document = self.collection.insert(model_dump)
+
+            document_id = str(inserted_document["_key"])
+
             return document_id
 
         except Exception as e:
             print(e)
             raise Exception(e)
-            
-    def update_document(self, document_id, updated_data, first_query) -> str:
+
+    def update_document(self, document_id: str, updated_data: BaseModel, first_query: Any) -> str:
         """Updates a document in the collection with the given document_id.
 
         Args:
@@ -63,11 +58,10 @@ class DocumentStore:
             bool: True if the document was successfully updated, False otherwise.
 
         Raises:
-            KeyError: If an invalid document_id is provided.
-            Exception: If an error occurs during the update process.
+            KeyError: If the document with ID is not found.
+            Exception: If the user does not match with the document user.
+            Exception: If an error occurs while updating the document data.
         """
-        
-        # 1. Make sure the document can be modified by the User
         document = self.collection.get(document_id)
 
         if document is None:
@@ -77,19 +71,24 @@ class DocumentStore:
             raise Exception(f"User {self.user} is not allowed to update Document {document_id}.")
 
         try:
-            result = self.collection.update(
+            self.collection.update(
                 {
                     "_key": document_id,
-                    "data": updated_data.model_dump(by_alias=True, mode="json"), 
+                    "data": updated_data.model_dump(by_alias=True, mode="json"),
                     "first_query": first_query,
                 },
                 merge=True,
                 keep_none=True,
             )
-        except Exception as e:
-            raise Exception("Not able to Update the Document due to: ", e)
 
-        return f"Updated document: {document_id}"
+            print(f"Updated document: {document_id} !")
+
+            return True
+
+        except Exception as e:
+            print("Not able to update the data.")
+            print(e)
+            raise Exception(e)
 
     def get_all_documents_of_user(self) -> list[dict]:
         """Retrieves all documents of a specific user from the collection.
@@ -99,29 +98,36 @@ class DocumentStore:
         Raises:
             Exception: If there is an error while retrieving the documents.
         """
-        conversation_list: list = []
         try:
-            cursor = self.db_client.aql.execute("""
+            document_list: list = []
+
+            # TODO: Clarify if we actually want to omit the `data` field.
+            # Implemented using MongoDB Feedback Management as a reference.
+            cursor = """
                 FOR doc IN @@collection
                     FILTER doc.data.user == @user
-                    RETURN doc
-            """,
-                bind_vars={"@collection": self.collection.name, "user": self.user}
+                    RETURN UNSET(doc, "data")
+            """
+
+            cursor = self.db_client.aql.execute(
+                cursor, bind_vars={"@collection": self.collection.name, "user": self.user}
             )
+
             for document in cursor:
-                document["id"] = document["_key"]
-                del document["_key"]
+                document["id"] = str(document["_key"])
                 del document["_id"]
+                del document["_key"]
                 del document["_rev"]
-                del document["data"]
-                conversation_list.append(document)
-            return conversation_list
+
+                document_list.append(document)
+
+            return document_list
 
         except Exception as e:
             print(e)
             raise Exception(e)
 
-    def get_user_documents_by_id(self, document_id) -> dict | None:
+    def get_user_documents_by_id(self, document_id: str) -> dict | None:
         """Retrieves a user document from the collection based on the given document ID.
 
         Args:
@@ -129,19 +135,26 @@ class DocumentStore:
 
         Returns:
             dict | None: The user document if found, None otherwise.
+
+        Raises:
+            KeyError: If document with ID is not found.
+            Exception: If the user does not match with the document user.
         """
-        try:
-            response = self.collection.get(document_id)
-            if response and response['data']["user"] == self.user:
-                response.pop("_id", None)
-                return response
-            return None
+        response = self.collection.get(document_id)
 
-        except Exception as e:
-            print(e)
-            raise Exception(e)
+        if response is None:
+            raise KeyError(f"Document with ID: {document_id} not found.")
 
-    def delete_document(self, document_id) -> str:
+        if response["data"]["user"] != self.user:
+            raise Exception(f"User mismatch. Document with ID: {document_id} does not belong to user: {self.user}")
+
+        del response["_id"]
+        del response["_key"]
+        del response["_rev"]
+
+        return response
+
+    def delete_document(self, document_id: str) -> str:
         """Deletes a document from the collection based on the provided document ID.
 
         Args:
@@ -151,17 +164,23 @@ class DocumentStore:
             bool: True if the document is successfully deleted, False otherwise.
 
         Raises:
-            KeyError: If the provided document ID is invalid.
-            Exception: If an error occurs during the deletion process.
+            KeyError: If the provided document_id is invalid:
+            Exception: If the user does not match with the document user.
+            Exception: If any errors occurs during delete process.
         """
-        try:
-            doc = self.collection.get(document_id)
-            if doc and doc['data']["user"] == self.user:
-                self.collection.delete(document_id)
-                return "Deleted document : {}".format(document_id)
-            else:
-                raise Exception("Not able to delete the Document")
+        response = self.collection.get(document_id)
 
+        if response is None:
+            raise KeyError(f"Document with ID: {document_id} not found.")
+
+        if response["data"]["user"] != self.user:
+            raise Exception(f"User mismatch. Feedback with ID: {document_id} does not belong to user: {self.user}")
+
+        try:
+            response = self.collection.delete(document_id)
+            print(f"Deleted document: {document_id} !")
+
+            return True
         except Exception as e:
             print(e)
-            raise Exception(e)
+            raise Exception("Not able to delete the data.")

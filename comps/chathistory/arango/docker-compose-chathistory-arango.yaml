@@ -1,48 +1,38 @@
-version: "3.8"
+# Copyright (C) 2024 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
 
-networks:
-  chathistory_network:
-    name: chathistory-network
-    driver: bridge
-
+version: "3"
 services:
-  arangodb:
-    image: jbajic/arangodb-arm:vector-index-preview
-    container_name: arango-vector
-    environment:
-      - ARANGO_ROOT_PASSWORD=test
+  arango:
+    image: arangodb/arangodb:latest
+    container_name: arangodb
     ports:
-      - "8529:8529"
-    volumes:
-      - arangodb_data:/var/lib/arangodb3
-      - arangodb_apps:/var/lib/arangodb3-apps
-    networks:
-      - chathistory_network
-    restart: unless-stopped
-  chathistory:
-    build:
-      context: ../../../
-      dockerfile: comps/chathistory/arango/Dockerfile
-    container_name: chathistory-server
-    ports:
-      - "6012:6012"
+      - 8529:8529
     environment:
       http_proxy: ${http_proxy}
       https_proxy: ${https_proxy}
       no_proxy: ${no_proxy}
-      ARANGODB_HOST: arangodb
-      ARANGODB_PORT: 8529
-      DB_NAME: ${DB_NAME:-OPEA}
-      COLLECTION_NAME: ${COLLECTION_NAME:-ChatHistory}
-      ARANGODB_USERNAME: root
-      ARANGODB_PASSWORD: test
-      PYTHONPATH: /home/user/
-    depends_on:
-      - arangodb
-    networks:
-      - chathistory_network
+      ARANGO_ROOT_PASSWORD: ${ARANGO_ROOT_PASSWORD}
+
+  chathistory-arango:
+    image: opea/chathistory-arango:latest
+    container_name: chathistory-arango-server
+    ports:
+      - "6012:6012"
+    ipc: host
+    environment:
+      http_proxy: ${http_proxy}
+      https_proxy: ${https_proxy}
+      no_proxy: ${no_proxy}
+      ARANGO_HOST: ${ARANGO_HOST}
+      ARANGO_PORT: ${ARANGO_PORT}
+      ARANGO_PROTOCOL: ${ARANGO_PROTOCOL}
+      ARANGO_USERNAME: ${ARANGO_USERNAME}
+      ARANGO_PASSWORD: ${ARANGO_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      COLLECTION_NAME: ${COLLECTION_NAME}
     restart: unless-stopped
 
-volumes:
-  arangodb_data:
-  arangodb_apps:
+networks:
+  default:
+    driver: bridge
