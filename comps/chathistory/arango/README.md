@@ -44,11 +44,11 @@ docker build -t opea/chathistory-arango-server:latest --build-arg https_proxy=$h
   -e http_proxy=$http_proxy \
   -e https_proxy=$https_proxy \
   -e no_proxy=$no_proxy \
-  -e ARANGODB_HOST=host.docker.internal \
-  -e ARANGODB_PORT=${ARANGODB_PORT} \
-  -e ARANGODB_PROTOCOL=${ARANGODB_PROTOCOL} \
-  -e ARANGODB_USERNAME=${ARANGODB_USERNAME} \
-  -e ARANGODB_PASSWORD=${ARANGODB_PASSWORD} \
+  -e ARANGO_HOST=${ARANGO_HOST} \
+  -e ARANGO_PORT=${ARANGO_PORT} \
+  -e ARANGO_PROTOCOL=${ARANGO_PROTOCOL} \
+  -e ARANGO_USERNAME=${ARANGO_USERNAME} \
+  -e ARANGO_PASSWORD=${ARANGO_PASSWORD} \
   -e DB_NAME=${DB_NAME} \
   -e COLLECTION_NAME=${COLLECTION_NAME} \
   opea/chathistory-arango-server:latest

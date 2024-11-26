@@ -4,7 +4,7 @@
 import os
 
 # ARANGO configuration
-ARANGO_HOST = os.getenv("ARANGODB_HOST", "localhost")
+ARANGO_HOST = os.getenv("ARANGO_HOST", "localhost")
 ARANGO_PORT = os.getenv("ARANGO_PORT", 8529)
 ARANGO_PROTOCOL = os.getenv("ARANGO_PROTOCOL", "http")
 ARANGO_USERNAME = os.getenv("ARANGO_USERNAME", "root")
