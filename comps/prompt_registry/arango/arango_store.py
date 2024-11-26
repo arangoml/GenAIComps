@@ -3,6 +3,7 @@
 
 import os
 
+from arango.exceptions import IndexGetError
 from arango_conn import ArangoClient
 from config import COLLECTION_NAME
 from prompt import PromptCreate
@@ -21,6 +22,7 @@ class PromptStore:
         user: str,
     ):
         self.user = user
+        self.inverted_index_exists = False
 
     def initialize_storage(self) -> None:
         self.db_client = ArangoClient.get_db_client()
@@ -133,26 +135,35 @@ class PromptStore:
             Exception: If there is an error while searching data.
         """
         try:
-            # Create a text index if not already created
-            if not any([True for index in self.collection.indexes() if index["name"] == "prompt_text_index"]):
-                self.collection.add_inverted_index(
-                    fields=["prompt_text"],
-                    name="prompt_text_index",
-                    # TODO: add more kwargs if needed
-                )
+            index_name = "prompt_text_index"
+
+            if not self.inverted_index_exists:
+                try:
+                    self.collection.get_index(index_name)
+
+                except IndexGetError:
+                    self.collection.add_inverted_index(
+                        fields=["prompt_text"],
+                        name=index_name,
+                        # TODO: add more kwargs if needed
+                    )
+
+                self.inverted_index_exists = True
 
             query = """
                 FOR doc IN @@collection
-                OPTIONS { indexHint: "prompt_text_index", forceIndexHint: true }
-                    FILTER @keyword IN doc.prompt_text
-                    LIMIT 5
+                OPTIONS { indexHint: @index_name, forceIndexHint: true }
+                    FILTER PHRASE(doc.prompt_text, @keyword, "text_en")
                     RETURN doc
             """
 
-            # Perform text search
             cursor = self.db_client.aql.execute(
                 query,
-                bind_vars={"@collection": self.collection.name, "keyword": keyword},
+                bind_vars={
+                    "@collection": self.collection.name,
+                    "index_name": index_name,
+                    "keyword": keyword,
+                },
             )
 
             serialized_data = []
