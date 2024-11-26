@@ -3,7 +3,7 @@
 
 version: "3"
 services:
-  arangodb:
+  arango:
     image: arangodb/arangodb:latest
     container_name: arangodb
     ports:
