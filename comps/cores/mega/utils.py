@@ -2,11 +2,16 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import ipaddress
+import json
 import multiprocessing
 import os
 import random
 from socket import AF_INET, SOCK_STREAM, socket
 from typing import List, Optional, Union
+
+import requests
+
+from .logger import CustomLogger
 
 
 def is_port_free(host: str, port: int) -> bool:
@@ -181,6 +186,62 @@ def random_port() -> Optional[int]:
         assigned_ports.clear()
         unassigned_ports.clear()
         return _random_port()
+
+
+class ConfigError(Exception):
+    """Custom exception for configuration errors."""
+
+    pass
+
+
+def load_model_configs(model_configs: str) -> dict:
+    """Load and validate the model configurations .
+
+    If valid, return the configuration for the specified model name.
+    """
+    logger = CustomLogger("models_loader")
+    try:
+        configs = json.loads(model_configs)
+        if not isinstance(configs, list) or not configs:
+            raise ConfigError("MODEL_CONFIGS must be a non-empty JSON array.")
+        required_keys = {"model_name", "displayName", "endpoint", "minToken", "maxToken"}
+        configs_map = {}
+        for config in configs:
+            missing_keys = [key for key in required_keys if key not in config]
+            if missing_keys:
+                raise ConfigError(f"Missing required configuration fields: {missing_keys}")
+            empty_keys = [key for key in required_keys if not config.get(key)]
+            if empty_keys:
+                raise ConfigError(f"Empty values found for configuration fields: {empty_keys}")
+            model_name = config["model_name"]
+            configs_map[model_name] = config
+        if not configs_map:
+            raise ConfigError("No valid configurations found.")
+        return configs_map
+    except json.JSONDecodeError:
+        logger.error("Error parsing MODEL_CONFIGS environment variable as JSON.")
+        raise ConfigError("MODEL_CONFIGS is not valid JSON.")
+    except ConfigError as e:
+        logger.error(str(e))
+        raise
+
+
+def get_access_token(token_url: str, client_id: str, client_secret: str) -> str:
+    """Get access token using OAuth client credentials flow."""
+    logger = CustomLogger("tgi_or_tei_service_auth")
+    data = {
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "grant_type": "client_credentials",
+    }
+    headers = {"Content-Type": "application/x-www-form-urlencoded"}
+    response = requests.post(token_url, data=data, headers=headers)
+    if response.status_code == 200:
+        token_info = response.json()
+        return token_info.get("access_token", "")
+    else:
+        logger.error(f"Failed to retrieve access token: {response.status_code}, {response.text}")
+        return ""
 
 
 class SafeContextManager:

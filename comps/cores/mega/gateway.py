@@ -4,10 +4,10 @@
 import base64
 import os
 from io import BytesIO
-from typing import Union
+from typing import List, Union
 
 import requests
-from fastapi import Request
+from fastapi import File, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from PIL import Image
 
@@ -17,12 +17,48 @@ from ..proto.api_protocol import (
     ChatCompletionResponse,
     ChatCompletionResponseChoice,
     ChatMessage,
+    DocSumChatCompletionRequest,
     EmbeddingRequest,
     UsageInfo,
 )
-from ..proto.docarray import LLMParams, LLMParamsDoc, RerankedDoc, RerankerParms, RetrieverParms, TextDoc
+from ..proto.docarray import DocSumDoc, LLMParams, LLMParamsDoc, RerankedDoc, RerankerParms, RetrieverParms, TextDoc
 from .constants import MegaServiceEndpoint, ServiceRoleType, ServiceType
 from .micro_service import MicroService
+
+
+def read_pdf(file):
+    from langchain.document_loaders import PyPDFLoader
+
+    loader = PyPDFLoader(file)
+    docs = loader.load_and_split()
+    return docs
+
+
+def read_text_from_file(file, save_file_name):
+    import docx2txt
+    from langchain.text_splitter import CharacterTextSplitter
+
+    # read text file
+    if file.headers["content-type"] == "text/plain":
+        file.file.seek(0)
+        content = file.file.read().decode("utf-8")
+        # Split text
+        text_splitter = CharacterTextSplitter()
+        texts = text_splitter.split_text(content)
+        # Create multiple documents
+        file_content = texts
+    # read pdf file
+    elif file.headers["content-type"] == "application/pdf":
+        documents = read_pdf(save_file_name)
+        file_content = [doc.page_content for doc in documents]
+    # read docx file
+    elif (
+        file.headers["content-type"] == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        or file.headers["content-type"] == "application/octet-stream"
+    ):
+        file_content = docx2txt.process(save_file_name)
+
+    return file_content
 
 
 class Gateway:
@@ -42,6 +78,7 @@ class Gateway:
         self.input_datatype = input_datatype
         self.output_datatype = output_datatype
         self.service = MicroService(
+            self.__class__.__name__,
             service_role=ServiceRoleType.MEGASERVICE,
             service_type=ServiceType.GATEWAY,
             host=self.host,
@@ -71,8 +108,19 @@ class Gateway:
 
     def list_service(self):
         response = {}
-        for node in self.all_leaves():
-            response = {self.services[node].description: self.services[node].endpoint_path}
+        for node, service in self.megaservice.services.items():
+            # Check if the service has a 'description' attribute and it is not None
+            if hasattr(service, "description") and service.description:
+                response[node] = {"description": service.description}
+            # Check if the service has an 'endpoint' attribute and it is not None
+            if hasattr(service, "endpoint") and service.endpoint:
+                if node in response:
+                    response[node]["endpoint"] = service.endpoint
+                else:
+                    response[node] = {"endpoint": service.endpoint}
+            # If neither 'description' nor 'endpoint' is available, add an error message for the node
+            if node not in response:
+                response[node] = {"error": f"Service node {node} does not have 'description' or 'endpoint' attribute."}
         return response
 
     def list_parameter(self):
@@ -156,9 +204,12 @@ class ChatQnAGateway(Gateway):
 
     async def handle_request(self, request: Request):
         data = await request.json()
+        print("data in handle request", data)
         stream_opt = data.get("stream", True)
         chat_request = ChatCompletionRequest.parse_obj(data)
+        print("chat request in handle request", chat_request)
         prompt = self._handle_message(chat_request.messages)
+        print("prompt in gateway", prompt)
         parameters = LLMParams(
             max_tokens=chat_request.max_tokens if chat_request.max_tokens else 1024,
             top_k=chat_request.top_k if chat_request.top_k else 10,
@@ -169,6 +220,11 @@ class ChatQnAGateway(Gateway):
             repetition_penalty=chat_request.repetition_penalty if chat_request.repetition_penalty else 1.03,
             streaming=stream_opt,
             chat_template=chat_request.chat_template if chat_request.chat_template else None,
+            model=(
+                chat_request.model
+                if chat_request.model
+                else os.getenv("MODEL_ID") if os.getenv("MODEL_ID") else "Intel/neural-chat-7b-v3-3"
+            ),
         )
         retriever_parameters = RetrieverParms(
             search_type=chat_request.search_type if chat_request.search_type else "similarity",
@@ -222,8 +278,9 @@ class CodeGenGateway(Gateway):
             temperature=chat_request.temperature if chat_request.temperature else 0.01,
             frequency_penalty=chat_request.frequency_penalty if chat_request.frequency_penalty else 0.0,
             presence_penalty=chat_request.presence_penalty if chat_request.presence_penalty else 0.0,
-            repetition_penalty=chat_request.repetition_penalty if chat_request.repetition_penalty else 1.03,
+            repetition_penalty=chat_request.repetition_penalty if chat_request.repetition_penalty else 1.2,
             streaming=stream_opt,
+            model=chat_request.model if chat_request.model else None,
         )
         result_dict, runtime_graph = await self.megaservice.schedule(
             initial_inputs={"query": prompt}, llm_parameters=parameters
@@ -262,19 +319,32 @@ class CodeTransGateway(Gateway):
         language_to = data["language_to"]
         source_code = data["source_code"]
         prompt_template = """
-            ### System: Please translate the following {language_from} codes into {language_to} codes.
+            ### System: Please translate the following {language_from} codes into {language_to} codes. Don't output any other content except translated codes.
 
-            ### Original codes:
-            '''{language_from}
+            ### Original {language_from} codes:
+            '''
 
             {source_code}
 
             '''
 
-            ### Translated codes:
+            ### Translated {language_to} codes:
+
         """
         prompt = prompt_template.format(language_from=language_from, language_to=language_to, source_code=source_code)
-        result_dict, runtime_graph = await self.megaservice.schedule(initial_inputs={"query": prompt})
+
+        parameters = LLMParams(
+            max_tokens=data.get("max_tokens", 1024),
+            top_k=data.get("top_k", 10),
+            top_p=data.get("top_p", 0.95),
+            temperature=data.get("temperature", 0.01),
+            repetition_penalty=data.get("repetition_penalty", 1.03),
+            streaming=data.get("stream", True),
+        )
+
+        result_dict, runtime_graph = await self.megaservice.schedule(
+            initial_inputs={"query": prompt}, llm_parameters=parameters
+        )
         for node, response in result_dict.items():
             # Here it suppose the last microservice in the megaservice is LLM.
             if (
@@ -345,14 +415,70 @@ class TranslationGateway(Gateway):
 class DocSumGateway(Gateway):
     def __init__(self, megaservice, host="0.0.0.0", port=8888):
         super().__init__(
-            megaservice, host, port, str(MegaServiceEndpoint.DOC_SUMMARY), ChatCompletionRequest, ChatCompletionResponse
+            megaservice,
+            host,
+            port,
+            str(MegaServiceEndpoint.DOC_SUMMARY),
+            input_datatype=DocSumChatCompletionRequest,
+            output_datatype=ChatCompletionResponse,
         )
 
-    async def handle_request(self, request: Request):
-        data = await request.json()
-        stream_opt = data.get("stream", True)
-        chat_request = ChatCompletionRequest.parse_obj(data)
-        prompt = self._handle_message(chat_request.messages)
+    async def handle_request(self, request: Request, files: List[UploadFile] = File(default=None)):
+
+        if "application/json" in request.headers.get("content-type"):
+            data = await request.json()
+            stream_opt = data.get("stream", True)
+            chat_request = ChatCompletionRequest.model_validate(data)
+            prompt = self._handle_message(chat_request.messages)
+
+            initial_inputs_data = {data["type"]: prompt}
+
+        elif "multipart/form-data" in request.headers.get("content-type"):
+            data = await request.form()
+            stream_opt = data.get("stream", True)
+            chat_request = ChatCompletionRequest.model_validate(data)
+
+            data_type = data.get("type")
+
+            file_summaries = []
+            if files:
+                for file in files:
+                    file_path = f"/tmp/{file.filename}"
+
+                    if data_type is not None and data_type in ["audio", "video"]:
+                        raise ValueError(
+                            "Audio and Video file uploads are not supported in docsum with curl request, please use the UI."
+                        )
+
+                    else:
+                        import aiofiles
+
+                        async with aiofiles.open(file_path, "wb") as f:
+                            await f.write(await file.read())
+
+                        docs = read_text_from_file(file, file_path)
+                        os.remove(file_path)
+
+                        if isinstance(docs, list):
+                            file_summaries.extend(docs)
+                        else:
+                            file_summaries.append(docs)
+
+            if file_summaries:
+                prompt = self._handle_message(chat_request.messages) + "\n".join(file_summaries)
+            else:
+                prompt = self._handle_message(chat_request.messages)
+
+            data_type = data.get("type")
+            if data_type is not None:
+                initial_inputs_data = {}
+                initial_inputs_data[data_type] = prompt
+            else:
+                initial_inputs_data = {"query": prompt}
+
+        else:
+            raise ValueError(f"Unknown request type: {request.headers.get('content-type')}")
+
         parameters = LLMParams(
             max_tokens=chat_request.max_tokens if chat_request.max_tokens else 1024,
             top_k=chat_request.top_k if chat_request.top_k else 10,
@@ -362,11 +488,14 @@ class DocSumGateway(Gateway):
             presence_penalty=chat_request.presence_penalty if chat_request.presence_penalty else 0.0,
             repetition_penalty=chat_request.repetition_penalty if chat_request.repetition_penalty else 1.03,
             streaming=stream_opt,
+            model=chat_request.model if chat_request.model else None,
             language=chat_request.language if chat_request.language else "auto",
         )
+
         result_dict, runtime_graph = await self.megaservice.schedule(
-            initial_inputs={"query": prompt}, llm_parameters=parameters
+            initial_inputs=initial_inputs_data, llm_parameters=parameters
         )
+
         for node, response in result_dict.items():
             # Here it suppose the last microservice in the megaservice is LLM.
             if (
@@ -477,11 +606,31 @@ class FaqGenGateway(Gateway):
             megaservice, host, port, str(MegaServiceEndpoint.FAQ_GEN), ChatCompletionRequest, ChatCompletionResponse
         )
 
-    async def handle_request(self, request: Request):
-        data = await request.json()
+    async def handle_request(self, request: Request, files: List[UploadFile] = File(default=None)):
+        data = await request.form()
         stream_opt = data.get("stream", True)
         chat_request = ChatCompletionRequest.parse_obj(data)
-        prompt = self._handle_message(chat_request.messages)
+        file_summaries = []
+        if files:
+            for file in files:
+                file_path = f"/tmp/{file.filename}"
+
+                import aiofiles
+
+                async with aiofiles.open(file_path, "wb") as f:
+                    await f.write(await file.read())
+                docs = read_text_from_file(file, file_path)
+                os.remove(file_path)
+                if isinstance(docs, list):
+                    file_summaries.extend(docs)
+                else:
+                    file_summaries.append(docs)
+
+        if file_summaries:
+            prompt = self._handle_message(chat_request.messages) + "\n".join(file_summaries)
+        else:
+            prompt = self._handle_message(chat_request.messages)
+
         parameters = LLMParams(
             max_tokens=chat_request.max_tokens if chat_request.max_tokens else 1024,
             top_k=chat_request.top_k if chat_request.top_k else 10,
@@ -491,6 +640,7 @@ class FaqGenGateway(Gateway):
             presence_penalty=chat_request.presence_penalty if chat_request.presence_penalty else 0.0,
             repetition_penalty=chat_request.repetition_penalty if chat_request.repetition_penalty else 1.03,
             streaming=stream_opt,
+            model=chat_request.model if chat_request.model else None,
         )
         result_dict, runtime_graph = await self.megaservice.schedule(
             initial_inputs={"query": prompt}, llm_parameters=parameters
@@ -623,7 +773,7 @@ class RetrievalToolGateway(Gateway):
             host,
             port,
             str(MegaServiceEndpoint.RETRIEVALTOOL),
-            Union[TextDoc, EmbeddingRequest, ChatCompletionRequest],
+            Union[TextDoc, ChatCompletionRequest],
             Union[RerankedDoc, LLMParamsDoc],
         )
 
@@ -639,7 +789,7 @@ class RetrievalToolGateway(Gateway):
 
         data = await request.json()
         query = None
-        for key, TypeClass in zip(["text", "input", "messages"], [TextDoc, EmbeddingRequest, ChatCompletionRequest]):
+        for key, TypeClass in zip(["text", "messages"], [TextDoc, ChatCompletionRequest]):
             query, chat_request = parser_input(data, TypeClass, key)
             if query is not None:
                 break
@@ -893,3 +1043,75 @@ class AvatarChatbotGateway(Gateway):
         last_node = runtime_graph.all_leaves()[-1]
         response = result_dict[last_node]["video_path"]
         return response
+
+
+class GraphragGateway(Gateway):
+    def __init__(self, megaservice, host="0.0.0.0", port=8888):
+        super().__init__(
+            megaservice, host, port, str(MegaServiceEndpoint.GRAPH_RAG), ChatCompletionRequest, ChatCompletionResponse
+        )
+
+    async def handle_request(self, request: Request):
+        data = await request.json()
+        stream_opt = data.get("stream", True)
+        chat_request = ChatCompletionRequest.parse_obj(data)
+
+        def parser_input(data, TypeClass, key):
+            chat_request = None
+            try:
+                chat_request = TypeClass.parse_obj(data)
+                query = getattr(chat_request, key)
+            except:
+                query = None
+            return query, chat_request
+
+        query = None
+        for key, TypeClass in zip(["text", "input", "messages"], [TextDoc, EmbeddingRequest, ChatCompletionRequest]):
+            query, chat_request = parser_input(data, TypeClass, key)
+            if query is not None:
+                break
+        if query is None:
+            raise ValueError(f"Unknown request type: {data}")
+        if chat_request is None:
+            raise ValueError(f"Unknown request type: {data}")
+        prompt = self._handle_message(chat_request.messages)
+        parameters = LLMParams(
+            max_tokens=chat_request.max_tokens if chat_request.max_tokens else 1024,
+            top_k=chat_request.top_k if chat_request.top_k else 10,
+            top_p=chat_request.top_p if chat_request.top_p else 0.95,
+            temperature=chat_request.temperature if chat_request.temperature else 0.01,
+            frequency_penalty=chat_request.frequency_penalty if chat_request.frequency_penalty else 0.0,
+            presence_penalty=chat_request.presence_penalty if chat_request.presence_penalty else 0.0,
+            repetition_penalty=chat_request.repetition_penalty if chat_request.repetition_penalty else 1.03,
+            streaming=stream_opt,
+            chat_template=chat_request.chat_template if chat_request.chat_template else None,
+        )
+        retriever_parameters = RetrieverParms(
+            search_type=chat_request.search_type if chat_request.search_type else "similarity",
+            k=chat_request.k if chat_request.k else 4,
+            distance_threshold=chat_request.distance_threshold if chat_request.distance_threshold else None,
+            fetch_k=chat_request.fetch_k if chat_request.fetch_k else 20,
+            lambda_mult=chat_request.lambda_mult if chat_request.lambda_mult else 0.5,
+            score_threshold=chat_request.score_threshold if chat_request.score_threshold else 0.2,
+        )
+        initial_inputs = chat_request
+        result_dict, runtime_graph = await self.megaservice.schedule(
+            initial_inputs=initial_inputs,
+            llm_parameters=parameters,
+            retriever_parameters=retriever_parameters,
+        )
+        for node, response in result_dict.items():
+            if isinstance(response, StreamingResponse):
+                return response
+        last_node = runtime_graph.all_leaves()[-1]
+        response_content = result_dict[last_node]["choices"][0]["message"]["content"]
+        choices = []
+        usage = UsageInfo()
+        choices.append(
+            ChatCompletionResponseChoice(
+                index=0,
+                message=ChatMessage(role="assistant", content=response_content),
+                finish_reason="stop",
+            )
+        )
+        return ChatCompletionResponse(model="chatqna", choices=choices, usage=usage)

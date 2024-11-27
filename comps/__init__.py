@@ -36,6 +36,8 @@ from comps.cores.proto.docarray import (
     ScoreDoc,
     PIIRequestDoc,
     PIIResponseDoc,
+    Audio2text,
+    DocSumDoc,
 )
 
 # Constants
@@ -59,6 +61,7 @@ from comps.cores.mega.gateway import (
     VideoQnAGateway,
     VisualQnAGateway,
     MultimodalQnAGateway,
+    GraphragGateway,
     AvatarChatbotGateway,
 )
 

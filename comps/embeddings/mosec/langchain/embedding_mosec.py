@@ -1,9 +1,10 @@
 # Copyright (C) 2024 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
 import os
 import time
-from typing import List, Optional
+from typing import List, Optional, Union
 
 from langchain_community.embeddings import OpenAIEmbeddings
 
@@ -17,13 +18,19 @@ from comps import (
     register_statistics,
     statistics_dict,
 )
+from comps.cores.proto.api_protocol import (
+    ChatCompletionRequest,
+    EmbeddingRequest,
+    EmbeddingResponse,
+    EmbeddingResponseData,
+)
 
 logger = CustomLogger("embedding_mosec")
 logflag = os.getenv("LOGFLAG", False)
 
 
 class MosecEmbeddings(OpenAIEmbeddings):
-    def _get_len_safe_embeddings(
+    async def _aget_len_safe_embeddings(
         self, texts: List[str], *, engine: str, chunk_size: Optional[int] = None
     ) -> List[List[float]]:
         _chunk_size = chunk_size or self.chunk_size
@@ -35,7 +42,7 @@ class MosecEmbeddings(OpenAIEmbeddings):
 
         _cached_empty_embedding: Optional[List[float]] = None
 
-        def empty_embedding() -> List[float]:
+        async def empty_embedding() -> List[float]:
             nonlocal _cached_empty_embedding
             if _cached_empty_embedding is None:
                 average_embedded = self.client.create(input="", **self._invocation_params)
@@ -44,7 +51,11 @@ class MosecEmbeddings(OpenAIEmbeddings):
                 _cached_empty_embedding = average_embedded["data"][0]["embedding"]
             return _cached_empty_embedding
 
-        return [e if e is not None else empty_embedding() for e in batched_embeddings]
+        async def get_embedding(e: Optional[List[float]]) -> List[float]:
+            return e if e is not None else await empty_embedding()
+
+        embeddings = await asyncio.gather(*[get_embedding(e) for e in batched_embeddings])
+        return embeddings
 
 
 @register_microservice(
@@ -57,16 +68,41 @@ class MosecEmbeddings(OpenAIEmbeddings):
     output_datatype=EmbedDoc,
 )
 @register_statistics(names=["opea_service@embedding_mosec"])
-async def embedding(input: TextDoc) -> EmbedDoc:
+async def embedding(
+    input: Union[TextDoc, EmbeddingRequest, ChatCompletionRequest]
+) -> Union[EmbedDoc, EmbeddingResponse, ChatCompletionRequest]:
     if logflag:
         logger.info(input)
     start = time.time()
-    embed_vector = await embeddings.aembed_query(input.text)
-    res = EmbedDoc(text=input.text, embedding=embed_vector)
+    if isinstance(input, TextDoc):
+        embed_vector = await get_embeddings(input.text)
+        embedding_res = embed_vector[0] if isinstance(input.text, str) else embed_vector
+        res = EmbedDoc(text=input.text, embedding=embedding_res)
+    else:
+        embed_vector = await get_embeddings(input.input)
+        if input.dimensions is not None:
+            embed_vector = [embed_vector[i][: input.dimensions] for i in range(len(embed_vector))]
+
+        # for standard openai embedding format
+        res = EmbeddingResponse(
+            data=[EmbeddingResponseData(index=i, embedding=embed_vector[i]) for i in range(len(embed_vector))]
+        )
+
+        if isinstance(input, ChatCompletionRequest):
+            input.embedding = res
+            # keep
+            res = input
+
     statistics_dict["opea_service@embedding_mosec"].append_latency(time.time() - start, None)
     if logflag:
         logger.info(res)
     return res
+
+
+async def get_embeddings(text: Union[str, List[str]]) -> List[List[float]]:
+    texts = [text] if isinstance(text, str) else text
+    embed_vector = await embeddings.aembed_documents(texts)
+    return embed_vector
 
 
 if __name__ == "__main__":
