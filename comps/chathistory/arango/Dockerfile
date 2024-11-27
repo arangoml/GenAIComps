@@ -25,6 +25,6 @@ RUN pip install --no-cache-dir --upgrade pip setuptools && \
 
 ENV PYTHONPATH=/home/user
 
-WORKDIR /home/user/comps/chathistory/mongo
+WORKDIR /home/user/comps/chathistory/arango
 
 ENTRYPOINT ["python", "chat.py"]
