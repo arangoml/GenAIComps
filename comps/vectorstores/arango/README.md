@@ -6,7 +6,7 @@
 ## 1. Start ArangoDB via Docker
 
 ```bash
-docker run -d --name arango -p 8529:8529 -e ARANGO_ROOT_PASSWORD=test arangodb/arangodb:3.13
+docker run -d --name arango -p 8529:8529 -e ARANGO_ROOT_PASSWORD=test arangodb/arangodb:3.12
 ```
 
 ## 2. Create a Vector Index
