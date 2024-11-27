@@ -1,0 +1,11 @@
+# Copyright (C) 2024 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+
+services:
+  arango:
+    image: arangodb/arangodb:3.13
+    container_name: arangodb
+    ports:
+      - 8529:8529
+    environment:
+      ARANGO_ROOT_PASSWORD: ${ARANGO_ROOT_PASSWORD}
