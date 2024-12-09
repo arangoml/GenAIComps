@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from arango_conn import ArangoClient
-from config import COLLECTION_NAME
+from config import ARANGO_COLLECTION_NAME
 from pydantic import BaseModel
 
 
@@ -17,10 +17,10 @@ class FeedbackStore:
     def initialize_storage(self) -> None:
         self.db_client = ArangoClient.get_db_client()
 
-        if not self.db_client.has_collection(COLLECTION_NAME):
-            self.db_client.create_collection(COLLECTION_NAME)
+        if not self.db_client.has_collection(ARANGO_COLLECTION_NAME):
+            self.db_client.create_collection(ARANGO_COLLECTION_NAME)
 
-        self.collection = self.db_client.collection(COLLECTION_NAME)
+        self.collection = self.db_client.collection(ARANGO_COLLECTION_NAME)
 
     def save_feedback(self, feedback_data: BaseModel) -> str:
         """Stores a new feedback data into the storage.
