@@ -1,0 +1,36 @@
+# Copyright (C) 2024 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+
+version: "3"
+services:
+  arango:
+    image: arangodb/arangodb:latest
+    container_name: arangodb
+    ports:
+      - 8529:8529
+    environment:
+      http_proxy: ${http_proxy}
+      https_proxy: ${https_proxy}
+      no_proxy: ${no_proxy}
+      ARANGO_ROOT_PASSWORD: ${ARANGO_ROOT_PASSWORD}
+
+  feedbackmanagement-arango:
+    image: opea/feedbackmanagement-arango:latest
+    container_name: feedbackmanagement-arango-server
+    ports:
+      - "6016:6016"
+    ipc: host
+    environment:
+      http_proxy: ${http_proxy}
+      https_proxy: ${https_proxy}
+      no_proxy: ${no_proxy}
+      ARANGO_URL: ${ARANGO_URL}
+      ARANGO_USERNAME: ${ARANGO_USERNAME}
+      ARANGO_PASSWORD: ${ARANGO_PASSWORD}
+      ARANGO_DB_NAME: ${ARANGO_DB_NAME}
+      ARANGO_COLLECTION_NAME: ${ARANGO_COLLECTION_NAME}
+    restart: unless-stopped
+
+networks:
+  default:
+    driver: bridge
