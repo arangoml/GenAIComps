@@ -3,7 +3,7 @@
 
 import os
 
-# ARANGO configuration
+# ArangoDB configuration
 ARANGO_URL = os.getenv("ARANGO_URL", "http://localhost:8529")
 ARANGO_USERNAME = os.getenv("ARANGO_USERNAME", "root")
 ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "test")
