@@ -171,14 +171,14 @@ def ingest_data_to_arango(doc_path: DocPath, embeddings: Embeddings | None) -> b
 
     for text in chunks:
         document = Document(page_content=text)
-        graph_docs = llm_transformer.convert_to_graph_documents([document])
+        graph_doc = llm_transformer.process_response(document)
 
         if generate_chunk_embeddings:
-            source = graph_docs[0].source
+            source = graph_doc.source
             source.metadata["embeddings"] = embeddings.embed_documents([source.page_content])[0]
 
         graph.add_graph_documents(
-            graph_documents=graph_docs,
+            graph_documents=[graph_doc],
             include_source=True,  # TODO: Parameterize
             graph_name="NewGraph",  # TODO: Parameterize
             update_graph_definition_if_exists=False,  # TODO: Set as reverse of `use_one_entity_collection`
