@@ -4,6 +4,7 @@ frontend
 huggingface_hub
 langchain
 git+https://github.com/arangoml/langchain.git@arangodb#subdirectory=libs/community
+langchain_openai
 python-arango
 numpy
 opentelemetry-api

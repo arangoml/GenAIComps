@@ -6,9 +6,27 @@ import time
 from typing import Union
 
 from arango import ArangoClient
-from config import ARANGODB_DATABASE, ARANGODB_PASSWORD, ARANGODB_URI, ARANGODB_USERNAME, EMBED_ENDPOINT, EMBED_MODEL
+from config import (
+    ARANGO_COLLECTION_NAME,
+    ARANGO_DB_NAME,
+    ARANGO_DISTANCE_STRATEGY,
+    ARANGO_EMBBEDDING_FIELD,
+    ARANGO_NUM_CENTROIDS,
+    ARANGO_PASSWORD,
+    ARANGO_PERFORM_NEIGHBOURHOOD_SAMPLING,
+    ARANGO_TEXT_FIELD,
+    ARANGO_URL,
+    ARANGO_USERNAME,
+    EMBED_DIMENSION,
+    EMBED_ENDPOINT,
+    EMBED_MODEL,
+    HUGGINGFACEHUB_API_TOKEN,
+    OPENAI_API_KEY,
+    OPENAI_EMBED_MODEL,
+)
 from langchain_community.embeddings import HuggingFaceBgeEmbeddings, HuggingFaceHubEmbeddings
 from langchain_community.vectorstores.arangodb_vector import ArangoVector
+from langchain_openai import OpenAIEmbeddings
 
 from comps import (
     CustomLogger,
@@ -54,26 +72,30 @@ async def retrieve(
         query = input.input
 
     if input.search_type == "similarity":
-        search_res = await vector_db.asimilarity_search_by_vector(
-            embedding=input.embedding, query=input.text, k=input.k
-        )
+        if not input.embedding:
+            raise ValueError("Embedding must be provided for similarity retriever")
+
+        search_res = await vector_db.asimilarity_search_by_vector(embedding=input.embedding, query=query, k=input.k)
     elif input.search_type == "similarity_distance_threshold":
         if input.distance_threshold is None:
-            raise ValueError("distance_threshold must be provided for " + "similarity_distance_threshold retriever")
+            raise ValueError("distance_threshold must be provided for similarity_distance_threshold retriever")
+        if not input.embedding:
+            raise ValueError("Embedding must be provided for similarity_distance_threshold retriever")
+
         search_res = await vector_db.asimilarity_search_by_vector(
-            embedding=input.embedding, query=input.text, k=input.k, distance_threshold=input.distance_threshold
+            embedding=input.embedding, query=query, k=input.k, distance_threshold=input.distance_threshold
         )
     elif input.search_type == "similarity_score_threshold":
         docs_and_similarities = await vector_db.asimilarity_search_with_relevance_scores(
-            query=input.text, k=input.k, score_threshold=input.score_threshold
+            query=query, k=input.k, score_threshold=input.score_threshold
         )
         search_res = [doc for doc, _ in docs_and_similarities]
     elif input.search_type == "mmr":
         search_res = await vector_db.amax_marginal_relevance_search(
-            query=input.text, k=input.k, fetch_k=input.fetch_k, lambda_mult=input.lambda_mult
+            query=query, k=input.k, fetch_k=input.fetch_k, lambda_mult=input.lambda_mult
         )
     else:
-        raise ValueError(f"{input.search_type} not valid")
+        raise ValueError(f"Search Type '{input.search_type}' not valid")
 
     # return different response format
     retrieved_docs = []
@@ -91,37 +113,56 @@ async def retrieve(
             input.documents = [doc.text for doc in retrieved_docs]
             result = input
 
+    if ARANGO_PERFORM_NEIGHBOURHOOD_SAMPLING:
+        # TODO
+        pass
+
     statistics_dict["opea_service@retriever_arangodb"].append_latency(time.time() - start, None)
+
     if logflag:
         logger.info(result)
+
     return result
 
 
 if __name__ == "__main__":
 
-    if EMBED_ENDPOINT:
+    if not EMBED_DIMENSION:
+        raise ValueError("EMBED_DIMENSION must specified in advance.")
+
+    if OPENAI_API_KEY and OPENAI_EMBED_MODEL:
+        # Use OpenAI embeddings
+        # TODO: Parameterize constructor?
+        embeddings = OpenAIEmbeddings(model=OPENAI_EMBED_MODEL, dimensions=EMBED_DIMENSION)
+
+    elif EMBED_ENDPOINT and HUGGINGFACEHUB_API_TOKEN:
         # create embeddings using TEI endpoint service
-        hf_token = os.getenv("HUGGINGFACEHUB_API_TOKEN")
-        embeddings = HuggingFaceHubEmbeddings(model=EMBED_ENDPOINT, huggingfacehub_api_token=hf_token)
+        embeddings = HuggingFaceHubEmbeddings(model=EMBED_ENDPOINT, huggingfacehub_api_token=HUGGINGFACEHUB_API_TOKEN)
     else:
         # create embeddings using local embedding model
         embeddings = HuggingFaceBgeEmbeddings(model_name=EMBED_MODEL)
 
-    db = ArangoClient(hosts=ARANGODB_URI).db(
-        name=ARANGODB_DATABASE, username=ARANGODB_USERNAME, password=ARANGODB_PASSWORD
-    )
+    client = ArangoClient(hosts=ARANGO_URL)
+    sys_db = client.db(name="_system", username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
+
+    if not sys_db.has_database(ARANGO_DB_NAME):
+        sys_db.create_database(ARANGO_DB_NAME)
+
+    db = client.db(name=ARANGO_DB_NAME, username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
 
     vector_db = ArangoVector(
-        embeddings,
+        embedding=embeddings,
+        embedding_dimension=EMBED_DIMENSION,
         database=db,
-        embedding_dimension=1024,  # TODO: Revisit this requirement
-        # search_type=
-        # collection_name=
-        # index_name=
-        # text_field=
-        # embedding_field=
-        # distance_strategy=
-        # num_centroids=
+        collection_name=ARANGO_COLLECTION_NAME,
+        embedding_field=ARANGO_EMBBEDDING_FIELD,
+        text_field=ARANGO_TEXT_FIELD,
+        distance_strategy=ARANGO_DISTANCE_STRATEGY,
+        num_centroids=ARANGO_NUM_CENTROIDS,
     )
+
+    index = vector_db.retrieve_vector_index()
+    if not index:
+        vector_db.create_vector_index()
 
     opea_microservices["opea_service@retriever_arangodb"].start()

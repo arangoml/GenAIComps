@@ -4,13 +4,23 @@
 import os
 
 # ArangoDB configuration
-ARANGODB_URI = os.getenv("ARANGODB_URI", "http://localhost:8529")
-ARANGODB_USERNAME = os.getenv("ARANGODB_USERNAME", "root")
-ARANGODB_PASSWORD = os.getenv("ARANGODB_PASSWORD", "test")
-ARANGODB_DATABASE = os.getenv("ARANGODB_DATABASE", "_system")
+ARANGO_URL = os.getenv("ARANGO_URL", "http://localhost:8529")
+ARANGO_USERNAME = os.getenv("ARANGO_USERNAME", "root")
+ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "test")
+ARANGO_DB_NAME = os.getenv("ARANGO_DB_NAME", "_system")
+ARANGO_COLLECTION_NAME = os.getenv("ARANGO_COLLECTION_NAME", "documents")
+ARANGO_DISTANCE_STRATEGY = os.getenv("ARANGO_DISTANCE_STRATEGY", "cosine")
+ARANGO_TEXT_FIELD = os.getenv("ARANGO_TEXT_FIELD", "text")
+ARANGO_EMBBEDDING_FIELD = os.getenv("ARANGO_EMBEDDING_FIELD", "embedding")
+ARANGO_PERFORM_NEIGHBOURHOOD_SAMPLING = os.getenv("ARANGO_PERFORM_NEIGHBOURHOOD_SAMPLING", False)
+ARANGO_NUM_CENTROIDS = os.getenv("ARANGO_NUM_CENTROIDS", 1)
 
-# Embedding model
+# Embedding configuration
 EMBED_MODEL = os.getenv("EMBED_MODEL", "BAAI/bge-base-en-v1.5")
-
-# Embedding endpoints
+EMBED_DIMENSION = os.getenv("EMBED_DIMENSION")
 EMBED_ENDPOINT = os.getenv("TEI_EMBEDDING_ENDPOINT", "")
+HUGGINGFACEHUB_API_TOKEN = os.getenv("HUGGINGFACEHUB_API_TOKEN")
+
+# OpenAI configuration (alternative to TEI & local model)
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_EMBED_MODEL = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small")
