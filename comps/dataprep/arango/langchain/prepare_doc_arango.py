@@ -169,6 +169,7 @@ def ingest_data_to_arango(doc_path: DocPath, graph_name: str, create_embeddings:
     # Text Embeddings Inference (optional) #
     ########################################
 
+    embeddings = None
     if create_embeddings:
         if OPENAI_API_KEY:
             # Use OpenAI embeddings
@@ -190,8 +191,6 @@ def ingest_data_to_arango(doc_path: DocPath, graph_name: str, create_embeddings:
             if logflag:
                 logger.error("No text embeddings inference endpoint is set.")
             embeddings = None
-    else:
-        embeddings = None
 
     ############
     # Chunking #
@@ -237,14 +236,14 @@ def ingest_data_to_arango(doc_path: DocPath, graph_name: str, create_embeddings:
 
     for text in chunks:
         document = Document(page_content=text)
-        graph_docs = llm_transformer.convert_to_graph_documents([document])
+        graph_doc = llm_transformer.process_response(document)
 
         if generate_chunk_embeddings:
-            source = graph_docs[0].source
+            source = graph_doc.source
             source.metadata["embeddings"] = embeddings.embed_documents([source.page_content])[0]
 
         graph.add_graph_documents(
-            graph_documents=graph_docs,
+            graph_documents=[graph_doc],
             include_source=INCLUDE_SOURCE,
             graph_name=graph_name,
             update_graph_definition_if_exists=not USE_ONE_ENTITY_COLLECTION,

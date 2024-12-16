@@ -63,3 +63,7 @@ services:
     build:
       dockerfile: comps/dataprep/multimedia2text/audio2text/Dockerfile
     image: ${REGISTRY:-opea}/dataprep-audio2text:${TAG:-latest}
+  dataprep-arango:
+    build:
+      dockerfile: comps/dataprep/arango/langchain/Dockerfile
+    image: ${REGISTRY:-opea}/dataprep-arango:${TAG:-latest}
