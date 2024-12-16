@@ -322,6 +322,7 @@ async def ingest_documents(
                         table_strategy=table_strategy,
                     ),
                     graph_name=graph_name,
+                    create_embeddings=create_embeddings,
                 )
             except json.JSONDecodeError:
                 raise HTTPException(status_code=500, detail="Fail to ingest data into qdrant.")
