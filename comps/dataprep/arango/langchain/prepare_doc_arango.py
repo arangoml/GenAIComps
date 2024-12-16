@@ -8,26 +8,30 @@ from typing import List, Optional, Union
 import openai
 from arango import ArangoClient
 from config import (
+    ALLOWED_NODES,
+    ALLOWED_RELATIONSHIPS,
+    ARANGO_BATCH_SIZE,
     ARANGO_DB_NAME,
     ARANGO_PASSWORD,
     ARANGO_URL,
     ARANGO_USERNAME,
     HUGGINGFACEHUB_API_TOKEN,
+    INSERT_ASYNC,
+    NODE_PROPERTIES,
     OPENAI_API_KEY,
+    OPENAI_EMBED_DIMENSIONS,
+    OPENAI_EMBED_MODEL,
+    RELATIONSHIP_PROPERTIES,
+    SYSTEM_PROMPT_PATH,
     TEI_EMBED_MODEL,
     TEI_EMBEDDING_ENDPOINT,
     TGI_LLM_ENDPOINT,
-    OPENAI_EMBED_MODEL,
-    OPENAI_EMBED_DIMENSIONS,
+    TGI_LLM_MAX_NEW_TOKENS,
+    TGI_LLM_TEMPERATURE,
+    TGI_LLM_TIMEOUT,
+    TGI_LLM_TOP_K,
+    TGI_LLM_TOP_P,
     USE_ONE_ENTITY_COLLECTION,
-    INSERT_ASYNC,
-    ARANGO_BATCH_SIZE,
-    INCLUDE_SOURCE,
-    SYSTEM_PROMPT_PATH,
-    ALLOWED_NODES,
-    ALLOWED_RELATIONSHIPS,
-    NODE_PROPERTIES,
-    RELATIONSHIP_PROPERTIES,
 )
 from fastapi import File, Form, HTTPException, UploadFile
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -35,11 +39,10 @@ from langchain_community.embeddings import HuggingFaceBgeEmbeddings, HuggingFace
 from langchain_community.graphs.arangodb_graph import ArangoGraph
 from langchain_community.llms import HuggingFaceEndpoint
 from langchain_core.documents import Document
-from langchain_core.embeddings import Embeddings
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_experimental.graph_transformers import LLMGraphTransformer
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_text_splitters import HTMLHeaderTextSplitter
-from langchain_core.prompts import ChatPromptTemplate, BasePromptTemplate
 
 from comps import CustomLogger, DocPath, opea_microservices, register_microservice
 from comps.dataprep.utils import (
@@ -52,7 +55,7 @@ from comps.dataprep.utils import (
 )
 
 logger = CustomLogger("prepare_doc_arango")
-logflag = os.getenv("LOGFLAG", False)
+logflag = os.getenv("LOGFLAG", True)
 
 upload_folder = "./uploaded_files/"
 
@@ -77,32 +80,15 @@ if SYSTEM_PROMPT_PATH is not None:
                     ),
                 ]
             )
-    except Exception:
-        print("Could not set custom Prompt")
+    except Exception as e:
+        logger.error(f"Could not set custom Prompt: {e}")
+
 
 def ingest_data_to_arango(doc_path: DocPath, graph_name: str, create_embeddings: bool) -> bool:
     """Ingest document to ArangoDB."""
     path = doc_path.path
     if logflag:
         logger.info(f"Parsing document {path}.")
-
-    ############
-    # ArangoDB #
-    ############
-
-    client = ArangoClient(hosts=ARANGO_URL)
-    sys_db = client.db(name="_system", username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
-
-    if not sys_db.has_database(ARANGO_DB_NAME):
-        sys_db.create_database(ARANGO_DB_NAME)
-
-    db = client.db(name=ARANGO_DB_NAME, username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
-
-    graph = ArangoGraph(
-        db=db,
-        include_examples=False,
-        generate_schema_on_init=False,
-    )
 
     #############################
     # Text Generation Inference #
@@ -128,32 +114,24 @@ def ingest_data_to_arango(doc_path: DocPath, graph_name: str, create_embeddings:
     elif TGI_LLM_ENDPOINT:
         llm = HuggingFaceEndpoint(
             endpoint_url=TGI_LLM_ENDPOINT,
-            max_new_tokens=512,
-            top_k=40,
-            top_p=0.9,
-            temperature=0.8,
-            timeout=600,
+            max_new_tokens=TGI_LLM_MAX_NEW_TOKENS,
+            top_k=TGI_LLM_TOP_K,
+            top_p=TGI_LLM_TOP_P,
+            temperature=TGI_LLM_TEMPERATURE,
+            timeout=TGI_LLM_TIMEOUT,
         )
     else:
         raise ValueError("No text generation inference endpoint is set.")
 
     try:
-        if not (NODE_PROPERTIES or RELATIONSHIP_PROPERTIES):
-            llm_transformer = LLMGraphTransformer(
-                llm=llm, 
-                prompt=PROMPT_TEMPLATE,
-                allowed_nodes=ALLOWED_NODES,
-                allowed_relationships=ALLOWED_RELATIONSHIPS,
-            )
-        else:
-            llm_transformer = LLMGraphTransformer(
-                llm=llm, 
-                node_properties=NODE_PROPERTIES,
-                relationship_properties=RELATIONSHIP_PROPERTIES,
-                prompt=PROMPT_TEMPLATE,
-                allowed_nodes=ALLOWED_NODES,
-                allowed_relationships=ALLOWED_RELATIONSHIPS,
-            )
+        llm_transformer = LLMGraphTransformer(
+            llm=llm,
+            allowed_nodes=ALLOWED_NODES,
+            allowed_relationships=ALLOWED_RELATIONSHIPS,
+            prompt=PROMPT_TEMPLATE,
+            node_properties=NODE_PROPERTIES if NODE_PROPERTIES else False,
+            relationship_properties=RELATIONSHIP_PROPERTIES if RELATIONSHIP_PROPERTIES else False,
+        )
     except (TypeError, ValueError) as e:
         if logflag:
             logger.warning(f"Advanced LLMGraphTransformer failed: {e}")
@@ -189,8 +167,26 @@ def ingest_data_to_arango(doc_path: DocPath, graph_name: str, create_embeddings:
             embeddings = HuggingFaceBgeEmbeddings(model_name=TEI_EMBED_MODEL)
         else:
             if logflag:
-                logger.error("No text embeddings inference endpoint is set.")
+                logger.warning("No embeddings environment variables are set, cannot generate embeddings.")
             embeddings = None
+
+    ############
+    # ArangoDB #
+    ############
+
+    client = ArangoClient(hosts=ARANGO_URL)
+    sys_db = client.db(name="_system", username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
+
+    if not sys_db.has_database(ARANGO_DB_NAME):
+        sys_db.create_database(ARANGO_DB_NAME)
+
+    db = client.db(name=ARANGO_DB_NAME, username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
+
+    graph = ArangoGraph(
+        db=db,
+        include_examples=False,
+        generate_schema_on_init=False,
+    )
 
     ############
     # Chunking #
@@ -244,11 +240,11 @@ def ingest_data_to_arango(doc_path: DocPath, graph_name: str, create_embeddings:
 
         graph.add_graph_documents(
             graph_documents=[graph_doc],
-            include_source=INCLUDE_SOURCE,
+            include_source=True,
             graph_name=graph_name,
             update_graph_definition_if_exists=not USE_ONE_ENTITY_COLLECTION,
             batch_size=ARANGO_BATCH_SIZE,
-            use_one_entity_collection=USE_ONE_ENTITY_COLLECTION, 
+            use_one_entity_collection=USE_ONE_ENTITY_COLLECTION,
             insert_async=INSERT_ASYNC,
         )
 
@@ -273,7 +269,7 @@ async def ingest_documents(
     chunk_overlap: int = Form(100),
     process_table: bool = Form(False),
     table_strategy: str = Form("fast"),
-    graph_name: str = Form("NewGraph"),
+    graph_name: str = Form("Graph"),
     create_embeddings: bool = Form(True),
 ):
     if logflag:

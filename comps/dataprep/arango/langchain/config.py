@@ -12,11 +12,15 @@ ARANGO_DB_NAME = os.getenv("ARANGO_DB_NAME", "_system")
 # ArangoDB graph configuration
 USE_ONE_ENTITY_COLLECTION = os.getenv("USE_ONE_ENTITY_COLLECTION", True)
 INSERT_ASYNC = os.getenv("INSERT_ASYNC", False)
-ARANGO_BATCH_SIZE = os.getenv("ARANGO_BATCH_SIZE", 1000)
-INCLUDE_SOURCE = os.getenv("INCLUDE_SOURCE", True)
+ARANGO_BATCH_SIZE = os.getenv("ARANGO_BATCH_SIZE", 500)
 
 # Text Generation Inference configuration
 TGI_LLM_ENDPOINT = os.getenv("TGI_LLM_ENDPOINT", "http://localhost:8080")
+TGI_LLM_MAX_NEW_TOKENS = os.getenv("TGI_LLM_MAX_NEW_TOKENS", 512)
+TGI_LLM_TOP_K = os.getenv("TGI_LLM_TOP_K", 40)
+TGI_LLM_TOP_P = os.getenv("TGI_LLM_TOP_P", 0.9)
+TGI_LLM_TEMPERATURE = os.getenv("TGI_LLM_TEMPERATURE", 0.8)
+TGI_LLM_TIMEOUT = os.getenv("TGI_LLM_TIMEOUT", 600)
 
 # Text Embeddings Inference configuration
 TEI_EMBEDDING_ENDPOINT = os.getenv("TEI_EMBEDDING_ENDPOINT")
@@ -31,9 +35,8 @@ OPENAI_CHAT_MODEL = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o")
 OPENAI_CHAT_TEMPERATURE = os.getenv("OPENAI_CHAT_TEMPERATURE", 0)
 
 # LLMGraphTransformer configuration
-ALLOWED_NODES = os.getenv("ALLOWED_NODES", []) # ["Person", "Organization"]
-ALLOWED_RELATIONSHIPS = os.getenv("ALLOWED_RELATIONSHIPS", []) # [("Person", "knows", "Person"), ("Person", "works_at", "Organization")]
-NODE_PROPERTIES = os.getenv("NODE_PROPERTIES", ['description'])
-RELATIONSHIP_PROPERTIES = os.getenv("RELATIONSHIP_PROPERTIES", ['description'])
-
-SYSTEM_PROMPT_PATH = os.getenv("SYSTEM_PROMPT_PATH", "./prompt.txt")
+SYSTEM_PROMPT_PATH = os.getenv("SYSTEM_PROMPT_PATH")
+ALLOWED_NODES = os.getenv("ALLOWED_NODES", [])
+ALLOWED_RELATIONSHIPS = os.getenv("ALLOWED_RELATIONSHIPS", [])
+NODE_PROPERTIES = os.getenv("NODE_PROPERTIES", ["description"])
+RELATIONSHIP_PROPERTIES = os.getenv("RELATIONSHIP_PROPERTIES", ["description"])
