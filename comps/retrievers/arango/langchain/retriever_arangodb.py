@@ -13,7 +13,7 @@ from config import (
     ARANGO_EMBBEDDING_FIELD,
     ARANGO_NUM_CENTROIDS,
     ARANGO_PASSWORD,
-    ARANGO_PERFORM_NEIGHBOURHOOD_SAMPLING,
+    ARANGO_GRAPH_NAME,
     ARANGO_TEXT_FIELD,
     ARANGO_URL,
     ARANGO_USERNAME,
@@ -106,11 +106,11 @@ async def retrieve(
     retrieved_docs = []
     if isinstance(input, EmbedDoc):
         for r in search_res:
-            retrieved_docs.append(TextDoc(text=r.page_content))
+            retrieved_docs.append(TextDoc(text=r.page_content, id=r.id))
         result = SearchedDoc(retrieved_docs=retrieved_docs, initial_query=input.text)
     else:
         for r in search_res:
-            retrieved_docs.append(RetrievalResponseData(text=r.page_content, metadata=r.metadata))
+            retrieved_docs.append(RetrievalResponseData(text=r.page_content, id=r.id, metadata=r.metadata))
         if isinstance(input, RetrievalRequest):
             result = RetrievalResponse(retrieved_docs=retrieved_docs)
         elif isinstance(input, ChatCompletionRequest):
@@ -118,9 +118,19 @@ async def retrieve(
             input.documents = [doc.text for doc in retrieved_docs]
             result = input
 
-    if ARANGO_PERFORM_NEIGHBOURHOOD_SAMPLING:
-        # TODO
-        pass
+    # if ARANGO_GRAPH_NAME:
+    #     # TODO: Sample neighborhood from the graph?
+    #     retrieved_docs_keys = [doc.id for doc in retrieved_docs]
+
+    #     query = """
+    #         FOR doc IN @@collection
+    #             FILTER doc._key IN @keys
+
+    #             FOR v, e IN 1..1 ANY doc GRAPH @graph
+    #                 RETURN ?
+    #     """
+
+    #     pass
 
     statistics_dict["opea_service@retriever_arangodb"].append_latency(time.time() - start, None)
 
