@@ -8,15 +8,30 @@ from typing import List, Optional, Union
 import openai
 from arango import ArangoClient
 from config import (
+    ALLOWED_NODES,
+    ALLOWED_RELATIONSHIPS,
+    ARANGO_BATCH_SIZE,
     ARANGO_DB_NAME,
     ARANGO_PASSWORD,
     ARANGO_URL,
     ARANGO_USERNAME,
     HUGGINGFACEHUB_API_TOKEN,
+    INSERT_ASYNC,
+    NODE_PROPERTIES,
     OPENAI_API_KEY,
+    OPENAI_EMBED_DIMENSIONS,
+    OPENAI_EMBED_MODEL,
+    RELATIONSHIP_PROPERTIES,
+    SYSTEM_PROMPT_PATH,
     TEI_EMBED_MODEL,
     TEI_EMBEDDING_ENDPOINT,
     TGI_LLM_ENDPOINT,
+    TGI_LLM_MAX_NEW_TOKENS,
+    TGI_LLM_TEMPERATURE,
+    TGI_LLM_TIMEOUT,
+    TGI_LLM_TOP_K,
+    TGI_LLM_TOP_P,
+    USE_ONE_ENTITY_COLLECTION,
 )
 from fastapi import File, Form, HTTPException, UploadFile
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -24,7 +39,7 @@ from langchain_community.embeddings import HuggingFaceBgeEmbeddings, HuggingFace
 from langchain_community.graphs.arangodb_graph import ArangoGraph
 from langchain_community.llms import HuggingFaceEndpoint
 from langchain_core.documents import Document
-from langchain_core.embeddings import Embeddings
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_experimental.graph_transformers import LLMGraphTransformer
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_text_splitters import HTMLHeaderTextSplitter
@@ -40,16 +55,120 @@ from comps.dataprep.utils import (
 )
 
 logger = CustomLogger("prepare_doc_arango")
-logflag = os.getenv("LOGFLAG", False)
+logflag = os.getenv("LOGFLAG", True)
 
 upload_folder = "./uploaded_files/"
 
+PROMPT_TEMPLATE = None
+if SYSTEM_PROMPT_PATH is not None:
+    try:
+        with open(SYSTEM_PROMPT_PATH, "r") as f:
+            PROMPT_TEMPLATE = ChatPromptTemplate.from_messages(
+                [
+                    (
+                        "system",
+                        f.read(),
+                    ),
+                    (
+                        "human",
+                        (
+                            "Tip: Make sure to answer in the correct format and do "
+                            "not include any explanations. "
+                            "Use the given format to extract information from the "
+                            "following input: {input}"
+                        ),
+                    ),
+                ]
+            )
+    except Exception as e:
+        logger.error(f"Could not set custom Prompt: {e}")
 
-def ingest_data_to_arango(doc_path: DocPath, embeddings: Embeddings | None) -> bool:
+
+def ingest_data_to_arango(doc_path: DocPath, graph_name: str, create_embeddings: bool) -> bool:
     """Ingest document to ArangoDB."""
     path = doc_path.path
     if logflag:
         logger.info(f"Parsing document {path}.")
+
+    #############################
+    # Text Generation Inference #
+    #############################
+
+    if OPENAI_API_KEY:
+        if logflag:
+            logger.info("OpenAI API Key is set. Verifying its validity...")
+        openai.api_key = OPENAI_API_KEY
+
+        try:
+            openai.models.list()
+            if logflag:
+                logger.info("OpenAI API Key is valid.")
+            llm = ChatOpenAI(temperature=0, model_name="gpt-4o")
+        except openai.error.AuthenticationError:
+            if logflag:
+                logger.info("OpenAI API Key is invalid.")
+        except Exception as e:
+            if logflag:
+                logger.info(f"An error occurred while verifying the API Key: {e}")
+
+    elif TGI_LLM_ENDPOINT:
+        llm = HuggingFaceEndpoint(
+            endpoint_url=TGI_LLM_ENDPOINT,
+            max_new_tokens=TGI_LLM_MAX_NEW_TOKENS,
+            top_k=TGI_LLM_TOP_K,
+            top_p=TGI_LLM_TOP_P,
+            temperature=TGI_LLM_TEMPERATURE,
+            timeout=TGI_LLM_TIMEOUT,
+        )
+    else:
+        raise ValueError("No text generation inference endpoint is set.")
+
+    try:
+        llm_transformer = LLMGraphTransformer(
+            llm=llm,
+            allowed_nodes=ALLOWED_NODES,
+            allowed_relationships=ALLOWED_RELATIONSHIPS,
+            prompt=PROMPT_TEMPLATE,
+            node_properties=NODE_PROPERTIES if NODE_PROPERTIES else False,
+            relationship_properties=RELATIONSHIP_PROPERTIES if RELATIONSHIP_PROPERTIES else False,
+        )
+    except (TypeError, ValueError) as e:
+        if logflag:
+            logger.warning(f"Advanced LLMGraphTransformer failed: {e}")
+        # Fall back to basic config
+        try:
+            llm_transformer = LLMGraphTransformer(llm=llm)
+        except (TypeError, ValueError) as e:
+            if logflag:
+                logger.error(f"Failed to initialize LLMGraphTransformer: {e}")
+            raise
+
+    ########################################
+    # Text Embeddings Inference (optional) #
+    ########################################
+
+    embeddings = None
+    if create_embeddings:
+        if OPENAI_API_KEY:
+            # Use OpenAI embeddings
+            embeddings = OpenAIEmbeddings(
+                model=OPENAI_EMBED_MODEL,
+                dimensions=OPENAI_EMBED_DIMENSIONS,
+            )
+
+        elif TEI_EMBEDDING_ENDPOINT and HUGGINGFACEHUB_API_TOKEN:
+            # Use TEI endpoint service
+            embeddings = HuggingFaceHubEmbeddings(
+                model=TEI_EMBEDDING_ENDPOINT,
+                huggingfacehub_api_token=HUGGINGFACEHUB_API_TOKEN,
+            )
+        elif TEI_EMBED_MODEL:
+            # Use local embedding model
+            embeddings = HuggingFaceBgeEmbeddings(model_name=TEI_EMBED_MODEL)
+        else:
+            if logflag:
+                logger.warning("No embeddings environment variables are set, cannot generate embeddings.")
+            embeddings = None
 
     ############
     # ArangoDB #
@@ -68,65 +187,6 @@ def ingest_data_to_arango(doc_path: DocPath, embeddings: Embeddings | None) -> b
         include_examples=False,
         generate_schema_on_init=False,
     )
-
-    #############################
-    # Text Generation Inference #
-    #############################
-
-    if OPENAI_API_KEY:
-        logger.info("OpenAI API Key is set. Verifying its validity...")
-        openai.api_key = OPENAI_API_KEY
-
-        try:
-            openai.models.list()
-            logger.info("OpenAI API Key is valid.")
-            llm = ChatOpenAI(temperature=0, model_name="gpt-4o")
-        except openai.error.AuthenticationError:
-            logger.info("OpenAI API Key is invalid.")
-        except Exception as e:
-            logger.info(f"An error occurred while verifying the API Key: {e}")
-
-    elif TGI_LLM_ENDPOINT:
-        llm = HuggingFaceEndpoint(
-            endpoint_url=TGI_LLM_ENDPOINT,
-            max_new_tokens=512,
-            top_k=40,
-            top_p=0.9,
-            temperature=0.8,
-            timeout=600,
-        )
-    else:
-        raise ValueError("No text generation inference endpoint is set.")
-
-    llm_transformer = LLMGraphTransformer(
-        llm=llm,
-        # prompt=..., # TODO: Parameterize
-        # allowed_nodes=..., # TODO: Parameterize
-        # allowed_relationships=..., # TODO: Parameterize
-    )
-
-    ########################################
-    # Text Embeddings Inference (optional) #
-    ########################################
-
-    if OPENAI_API_KEY:
-        # Use OpenAI embeddings
-        embeddings = OpenAIEmbeddings(
-            model="text-embedding-3-small",  # TODO: Parameterize
-            dimensions=512,  # TODO: Parameterize
-        )
-
-    if TEI_EMBEDDING_ENDPOINT and HUGGINGFACEHUB_API_TOKEN:
-        # Use TEI endpoint service
-        embeddings = HuggingFaceHubEmbeddings(
-            model=TEI_EMBEDDING_ENDPOINT,
-            huggingfacehub_api_token=HUGGINGFACEHUB_API_TOKEN,
-        )
-    elif TEI_EMBED_MODEL:
-        # Use local embedding model
-        embeddings = HuggingFaceBgeEmbeddings(model_name=TEI_EMBED_MODEL)
-    else:
-        embeddings = None
 
     ############
     # Chunking #
@@ -159,7 +219,8 @@ def ingest_data_to_arango(doc_path: DocPath, embeddings: Embeddings | None) -> b
 
     if doc_path.process_table and path.endswith(".pdf"):
         table_chunks = get_tables_result(path, doc_path.table_strategy)
-        chunks = chunks + table_chunks
+        if isinstance(table_chunks, list):
+            chunks = chunks + table_chunks
     if logflag:
         logger.info("Done preprocessing. Created ", len(chunks), " chunks of the original file.")
 
@@ -179,12 +240,12 @@ def ingest_data_to_arango(doc_path: DocPath, embeddings: Embeddings | None) -> b
 
         graph.add_graph_documents(
             graph_documents=[graph_doc],
-            include_source=True,  # TODO: Parameterize
-            graph_name="NewGraph",  # TODO: Parameterize
-            update_graph_definition_if_exists=False,  # TODO: Set as reverse of `use_one_entity_collection`
-            batch_size=1000,  # TODO: Parameterize
-            use_one_entity_collection=True,  # TODO: Parameterize
-            insert_async=False,  # TODO: Parameterize
+            include_source=True,
+            graph_name=graph_name,
+            update_graph_definition_if_exists=not USE_ONE_ENTITY_COLLECTION,
+            batch_size=ARANGO_BATCH_SIZE,
+            use_one_entity_collection=USE_ONE_ENTITY_COLLECTION,
+            insert_async=INSERT_ASYNC,
         )
 
     if logflag:
@@ -208,6 +269,8 @@ async def ingest_documents(
     chunk_overlap: int = Form(100),
     process_table: bool = Form(False),
     table_strategy: str = Form("fast"),
+    graph_name: str = Form("Graph"),
+    create_embeddings: bool = Form(True),
 ):
     if logflag:
         logger.info(f"files:{files}")
@@ -228,7 +291,9 @@ async def ingest_documents(
                     chunk_overlap=chunk_overlap,
                     process_table=process_table,
                     table_strategy=table_strategy,
-                )
+                ),
+                graph_name=graph_name,
+                create_embeddings=create_embeddings,
             )
             uploaded_files.append(save_path)
             if logflag:
@@ -255,7 +320,9 @@ async def ingest_documents(
                         chunk_overlap=chunk_overlap,
                         process_table=process_table,
                         table_strategy=table_strategy,
-                    )
+                    ),
+                    graph_name=graph_name,
+                    create_embeddings=create_embeddings,
                 )
             except json.JSONDecodeError:
                 raise HTTPException(status_code=500, detail="Fail to ingest data into qdrant.")
