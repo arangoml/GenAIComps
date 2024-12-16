@@ -44,3 +44,7 @@ For details, please refer to this [readme](vdms/README.md)
 ## Dataprep Microservice with Multimodal
 
 For details, please refer to this [readme](multimodal/redis/langchain/README.md)
+
+## Dataprep Microservice with ArangoDB
+
+For details, please refer to this [readme](arango/langchain/README.md)
