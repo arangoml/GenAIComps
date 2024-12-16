@@ -17,7 +17,7 @@ from config import (
     ARANGO_TEXT_FIELD,
     ARANGO_URL,
     ARANGO_USERNAME,
-    EMBED_DIMENSION,
+    ARANGO_EMBED_DIMENSION,
     EMBED_ENDPOINT,
     EMBED_MODEL,
     HUGGINGFACEHUB_API_TOKEN,
@@ -65,34 +65,39 @@ async def retrieve(
         logger.info(input)
     start = time.time()
 
-    if isinstance(input, EmbedDoc):
-        query = input.text
-    else:
-        # for RetrievalRequest, ChatCompletionRequest
-        query = input.input
+    index = vector_db.retrieve_vector_index()
+    if index is None and db.collection(vector_db.collection_name).count() > 0:
+        vector_db.create_vector_index()
+
+    query = input.text if isinstance(input, EmbedDoc) else input.input
+    embedding = input.embedding if isinstance(input.embedding, list) else None
+    k = input.k
 
     if input.search_type == "similarity":
         if not input.embedding:
             raise ValueError("Embedding must be provided for similarity retriever")
 
-        search_res = await vector_db.asimilarity_search_by_vector(embedding=input.embedding, query=query, k=input.k)
+        search_res = await vector_db.asimilarity_search_by_vector(query=query, embedding=embedding, k=k)
     elif input.search_type == "similarity_distance_threshold":
         if input.distance_threshold is None:
             raise ValueError("distance_threshold must be provided for similarity_distance_threshold retriever")
-        if not input.embedding:
-            raise ValueError("Embedding must be provided for similarity_distance_threshold retriever")
+        if not embedding:
+            raise ValueError("Embedding must not be None for similarity_distance_threshold retriever")
 
         search_res = await vector_db.asimilarity_search_by_vector(
-            embedding=input.embedding, query=query, k=input.k, distance_threshold=input.distance_threshold
+            query=query,
+            embedding=embedding,
+            k=k,
+            distance_threshold=input.distance_threshold,
         )
     elif input.search_type == "similarity_score_threshold":
         docs_and_similarities = await vector_db.asimilarity_search_with_relevance_scores(
-            query=query, k=input.k, score_threshold=input.score_threshold
+            query=query, embedding=embedding, k=k, score_threshold=input.score_threshold
         )
         search_res = [doc for doc, _ in docs_and_similarities]
     elif input.search_type == "mmr":
         search_res = await vector_db.amax_marginal_relevance_search(
-            query=query, k=input.k, fetch_k=input.fetch_k, lambda_mult=input.lambda_mult
+            query=query, embedding=embedding, k=k, fetch_k=input.fetch_k, lambda_mult=input.lambda_mult
         )
     else:
         raise ValueError(f"Search Type '{input.search_type}' not valid")
@@ -127,13 +132,12 @@ async def retrieve(
 
 if __name__ == "__main__":
 
-    if not EMBED_DIMENSION:
+    if not ARANGO_EMBED_DIMENSION:
         raise ValueError("EMBED_DIMENSION must specified in advance.")
 
     if OPENAI_API_KEY and OPENAI_EMBED_MODEL:
         # Use OpenAI embeddings
-        # TODO: Parameterize constructor?
-        embeddings = OpenAIEmbeddings(model=OPENAI_EMBED_MODEL, dimensions=EMBED_DIMENSION)
+        embeddings = OpenAIEmbeddings(model=OPENAI_EMBED_MODEL, dimensions=ARANGO_EMBED_DIMENSION)
 
     elif EMBED_ENDPOINT and HUGGINGFACEHUB_API_TOKEN:
         # create embeddings using TEI endpoint service
@@ -152,7 +156,7 @@ if __name__ == "__main__":
 
     vector_db = ArangoVector(
         embedding=embeddings,
-        embedding_dimension=EMBED_DIMENSION,
+        embedding_dimension=ARANGO_EMBED_DIMENSION,
         database=db,
         collection_name=ARANGO_COLLECTION_NAME,
         embedding_field=ARANGO_EMBBEDDING_FIELD,
@@ -160,9 +164,5 @@ if __name__ == "__main__":
         distance_strategy=ARANGO_DISTANCE_STRATEGY,
         num_centroids=ARANGO_NUM_CENTROIDS,
     )
-
-    index = vector_db.retrieve_vector_index()
-    if not index:
-        vector_db.create_vector_index()
 
     opea_microservices["opea_service@retriever_arangodb"].start()
