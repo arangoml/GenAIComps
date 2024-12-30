@@ -236,7 +236,7 @@ def ingest_data_to_arango(doc_path: DocPath, graph_name: str, create_embeddings:
 
         if generate_chunk_embeddings:
             source = graph_doc.source
-            source.metadata["embeddings"] = embeddings.embed_documents([source.page_content])[0]
+            source.metadata["embedding"] = embeddings.embed_documents([source.page_content])[0]
 
         graph.add_graph_documents(
             graph_documents=[graph_doc],
@@ -246,6 +246,7 @@ def ingest_data_to_arango(doc_path: DocPath, graph_name: str, create_embeddings:
             batch_size=ARANGO_BATCH_SIZE,
             use_one_entity_collection=USE_ONE_ENTITY_COLLECTION,
             insert_async=INSERT_ASYNC,
+            source_metadata_fields_to_extract_to_top_level={"embedding"},
         )
 
     if logflag:
