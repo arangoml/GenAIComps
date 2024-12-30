@@ -6,7 +6,7 @@
 ## 1. Start ArangoDB via Docker
 
 ```bash
-docker run -d --name arango -p 8529:8529 -e ARANGO_ROOT_PASSWORD=test arangodb/arangodb:3.12
+docker run -d --name arangodb -p 8529:8529 -e ARANGO_ROOT_PASSWORD=openSesame arangodb/arangodb:3.12
 ```
 
 ## 2. Create a Vector Index
@@ -15,12 +15,13 @@ docker run -d --name arango -p 8529:8529 -e ARANGO_ROOT_PASSWORD=test arangodb/a
 
 ```bash
 127.0.0.1:8529@_system > db.myCollection.ensureIndex(
-{
-        name: "my-vector-index",
-        type: "vector",
-        fields: ["embeddings"]
-        params: { metric: "cosine", dimension: 128, nLists: 100 }
-}
+    {
+            name: "my-vector-index",
+            type: "vector",
+            fields: ["embedding"]
+            params: { metric: "cosine", dimension: 1024, nLists: 100 }
+    }
+)
 ```
 
 **Using the `python-arango` driver**:
@@ -28,7 +29,7 @@ docker run -d --name arango -p 8529:8529 -e ARANGO_ROOT_PASSWORD=test arangodb/a
 ```python
 from arango import ArangoClient
 
-db = ArangoClient().db('_system', username='root', password='test')
+db = ArangoClient(hosts="http://localhost:8529").db('_system', username='root', password='openSesame')
 
 db.collection("myCollection").add_index(
     {
@@ -37,7 +38,7 @@ db.collection("myCollection").add_index(
         "fields": ["embeddings"],
         "params": {
             "metric": "cosine",
-            "dimensions": 128,
+            "dimension": 1024,
             "nLists": 100,
         },
     }
@@ -50,7 +51,7 @@ db.collection("myCollection").add_index(
 LET query_embedding = [0.1, 0.3, 0.5, …]
 
 FOR doc IN myCollection
-    LET score = APPROX_NEAR_COSINE(doc.embeddings, query_embedding)
+    LET score = APPROX_NEAR_COSINE(doc.embedding, query_embedding)
     SORT score DESC
     LIMIT 5
     RETURN {doc, score}   
