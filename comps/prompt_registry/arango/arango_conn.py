@@ -3,11 +3,11 @@
 
 from arango import ArangoClient as PythonArangoClient
 from arango.database import StandardDatabase
-from config import ARANGO_HOST, ARANGO_PASSWORD, ARANGO_PORT, ARANGO_PROTOCOL, ARANGO_USERNAME, DB_NAME
+from config import ARANGO_URL, ARANGO_PASSWORD, ARANGO_USERNAME, ARANGO_DB_NAME
 
 
 class ArangoClient:
-    conn_url = f"{ARANGO_PROTOCOL}://{ARANGO_HOST}:{ARANGO_PORT}/"
+    conn_url = ARANGO_URL
 
     @staticmethod
     def get_db_client() -> StandardDatabase:
@@ -19,11 +19,11 @@ class ArangoClient:
             sys_db = client.db("_system", username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
 
             # Create target database if it doesn't exist
-            if not sys_db.has_database(DB_NAME):
-                sys_db.create_database(DB_NAME)
+            if not sys_db.has_database(ARANGO_DB_NAME):
+                sys_db.create_database(ARANGO_DB_NAME)
 
             # Now connect to the target database
-            db = client.db(DB_NAME, username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
+            db = client.db(ARANGO_DB_NAME, username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
 
             return db
 

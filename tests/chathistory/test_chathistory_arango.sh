@@ -7,13 +7,11 @@ set -x
 WORKPATH=$(dirname "$PWD")
 ip_address=$(hostname -I | awk '{print $1}')
 
-export ARANGO_HOST=${ip_address}
-export ARANGO_PORT=8529
-export ARANGO_PROTOCOL=${ARANGO_PROTOCOL:-"http"}
+export ARANGO_URL=${ARANGO_URL:-"http://${ip_address}:8529"} 
 export ARANGO_USERNAME=${ARANGO_USERNAME:-"root"}
 export ARANGO_PASSWORD=${ARANGO_PASSWORD:-"test"}
-export DB_NAME=${DB_NAME:-"Conversations"}
-export COLLECTION_NAME=${COLLECTION_NAME:-"test"}
+export ARANGO_DB_NAME=${ARANGO_DB_NAME:-"Conversations"}
+export ARANGO_COLLECTION_NAME=${ARANGO_COLLECTION_NAME:-"test"}
 
 function build_docker_images() {
     cd $WORKPATH
@@ -36,13 +34,11 @@ function start_service() {
         -e http_proxy=$http_proxy \
         -e https_proxy=$https_proxy \
         -e no_proxy=$no_proxy \
-        -e ARANGO_HOST=${ARANGO_HOST} \
-        -e ARANGO_PORT=${ARANGO_PORT} \
-        -e ARANGO_PROTOCOL=${ARANGO_PROTOCOL} \
+        -e ARANGO_URL=${ARANGO_URL} \
         -e ARANGO_USERNAME=${ARANGO_USERNAME} \
         -e ARANGO_PASSWORD=${ARANGO_PASSWORD} \
-        -e DB_NAME=${DB_NAME} \
-        -e COLLECTION_NAME=${COLLECTION_NAME} \
+        -e ARANGO_DB_NAME=${ARANGO_DB_NAME} \
+        -e ARANGO_COLLECTION_NAME=${ARANGO_COLLECTION_NAME} \
         opea/chathistory-arango-server:comps
 
     sleep 10s

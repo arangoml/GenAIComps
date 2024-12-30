@@ -1,7 +1,7 @@
 from typing import Any
 
 from arango_conn import ArangoClient
-from config import COLLECTION_NAME
+from config import ARANGO_COLLECTION_NAME
 from pydantic import BaseModel
 
 
@@ -16,10 +16,10 @@ class DocumentStore:
     def initialize_storage(self) -> None:
         self.db_client = ArangoClient.get_db_client()
 
-        if not self.db_client.has_collection(COLLECTION_NAME):
-            self.db_client.create_collection(COLLECTION_NAME)
+        if not self.db_client.has_collection(ARANGO_COLLECTION_NAME):
+            self.db_client.create_collection(ARANGO_COLLECTION_NAME)
 
-        self.collection = self.db_client.collection(COLLECTION_NAME)
+        self.collection = self.db_client.collection(ARANGO_COLLECTION_NAME)
 
     def save_document(self, document: BaseModel) -> str:
         """Stores a new document into the storage.
