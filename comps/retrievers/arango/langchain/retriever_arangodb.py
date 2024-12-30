@@ -3,7 +3,7 @@
 
 import os
 import time
-from typing import Union
+from typing import Any, Optional, Union
 
 from arango import ArangoClient
 from config import (
@@ -11,13 +11,16 @@ from config import (
     ARANGO_DB_NAME,
     ARANGO_DISTANCE_STRATEGY,
     ARANGO_EMBBEDDING_FIELD,
+    ARANGO_EMBED_DIMENSION,
     ARANGO_NUM_CENTROIDS,
     ARANGO_PASSWORD,
-    ARANGO_GRAPH_NAME,
     ARANGO_TEXT_FIELD,
+    ARANGO_TRAVERSAL_GRAPH_NAME,
+    ARANGO_TRAVERSAL_MAX_DEPTH,
+    ARANGO_TRAVERSAL_MIN_DEPTH,
     ARANGO_URL,
+    ARANGO_USE_APPROX_SEARCH,
     ARANGO_USERNAME,
-    ARANGO_EMBED_DIMENSION,
     EMBED_ENDPOINT,
     EMBED_MODEL,
     HUGGINGFACEHUB_API_TOKEN,
@@ -46,6 +49,15 @@ from comps.cores.proto.api_protocol import (
     RetrievalResponseData,
 )
 
+
+class ArangoTextDoc(TextDoc):
+    neighborhood: Optional[list[dict[str, Any]]] = None
+
+
+class ArangoRetrievalResponseData(RetrievalResponseData):
+    neighborhood: Optional[list[dict[str, Any]]] = None
+
+
 logger = CustomLogger("retriever_arangodb")
 logflag = os.getenv("LOGFLAG", False)
 
@@ -65,10 +77,7 @@ async def retrieve(
         logger.info(input)
     start = time.time()
 
-    index = vector_db.retrieve_vector_index()
-    if index is None and db.collection(vector_db.collection_name).count() > 0:
-        vector_db.create_vector_index()
-
+    use_approx = ARANGO_USE_APPROX_SEARCH
     query = input.text if isinstance(input, EmbedDoc) else input.input
     embedding = input.embedding if isinstance(input.embedding, list) else None
     k = input.k
@@ -77,7 +86,9 @@ async def retrieve(
         if not input.embedding:
             raise ValueError("Embedding must be provided for similarity retriever")
 
-        search_res = await vector_db.asimilarity_search_by_vector(query=query, embedding=embedding, k=k)
+        search_res = await vector_db.asimilarity_search_by_vector(
+            query=query, embedding=embedding, k=k, use_approx=use_approx
+        )
     elif input.search_type == "similarity_distance_threshold":
         if input.distance_threshold is None:
             raise ValueError("distance_threshold must be provided for similarity_distance_threshold retriever")
@@ -89,48 +100,88 @@ async def retrieve(
             embedding=embedding,
             k=k,
             distance_threshold=input.distance_threshold,
+            use_approx=use_approx,
         )
     elif input.search_type == "similarity_score_threshold":
         docs_and_similarities = await vector_db.asimilarity_search_with_relevance_scores(
-            query=query, embedding=embedding, k=k, score_threshold=input.score_threshold
+            query=query, embedding=embedding, k=k, score_threshold=input.score_threshold, use_approx=use_approx
         )
         search_res = [doc for doc, _ in docs_and_similarities]
     elif input.search_type == "mmr":
         search_res = await vector_db.amax_marginal_relevance_search(
-            query=query, embedding=embedding, k=k, fetch_k=input.fetch_k, lambda_mult=input.lambda_mult
+            query=query,
+            embedding=embedding,
+            k=k,
+            fetch_k=input.fetch_k,
+            lambda_mult=input.lambda_mult,
+            use_approx=use_approx,
         )
     else:
         raise ValueError(f"Search Type '{input.search_type}' not valid")
 
+    neighborhoods = {}
+    if ARANGO_TRAVERSAL_GRAPH_NAME:
+        keys = [r.id for r in search_res]
+        min, max = ARANGO_TRAVERSAL_MIN_DEPTH, ARANGO_TRAVERSAL_MAX_DEPTH
+
+        aql = f"""
+            FOR doc IN @@collection
+                FILTER doc._key IN @keys
+
+                LET neighborhood = (
+                    FOR v, e, p IN {min}..{max} ANY doc GRAPH @graph
+                        // FILTER PARSE_IDENTIFIER(v).collection != '{ARANGO_COLLECTION_NAME}'
+                        RETURN p
+                )
+
+                RETURN {[doc._key]: neighborhood}
+        """
+
+        bind_vars = {
+            "@collection": ARANGO_COLLECTION_NAME,
+            "keys": keys,
+            "graph": ARANGO_TRAVERSAL_GRAPH_NAME,
+        }
+
+        cursor = vector_db.db.aql.execute(aql, bind_vars=bind_vars)
+
+        for doc in cursor:
+            neighborhoods.update(doc)
+
     # return different response format
-    retrieved_docs = []
+    retrieved_docs: Union[list[ArangoTextDoc], list[ArangoRetrievalResponseData]] = []
     if isinstance(input, EmbedDoc):
         for r in search_res:
-            retrieved_docs.append(TextDoc(text=r.page_content, id=r.id))
+            retrieved_docs.append(
+                ArangoTextDoc(
+                    text=r.page_content,
+                    id=r.id,
+                    neighborhood=neighborhoods.get(r.id),
+                )
+            )
+
         result = SearchedDoc(retrieved_docs=retrieved_docs, initial_query=input.text)
+
     else:
         for r in search_res:
-            retrieved_docs.append(RetrievalResponseData(text=r.page_content, id=r.id, metadata=r.metadata))
+            retrieved_docs.append(
+                ArangoRetrievalResponseData(
+                    text=r.page_content,
+                    id=r.id,
+                    metadata=r.metadata,
+                    neighborhood=neighborhoods.get(r.id),
+                )
+            )
+
         if isinstance(input, RetrievalRequest):
             result = RetrievalResponse(retrieved_docs=retrieved_docs)
+
         elif isinstance(input, ChatCompletionRequest):
             input.retrieved_docs = retrieved_docs
             input.documents = [doc.text for doc in retrieved_docs]
             result = input
-
-    # if ARANGO_GRAPH_NAME:
-    #     # TODO: Sample neighborhood from the graph?
-    #     retrieved_docs_keys = [doc.id for doc in retrieved_docs]
-
-    #     query = """
-    #         FOR doc IN @@collection
-    #             FILTER doc._key IN @keys
-
-    #             FOR v, e IN 1..1 ANY doc GRAPH @graph
-    #                 RETURN ?
-    #     """
-
-    #     pass
+        else:
+            raise ValueError("Invalid input type: ", type(input))
 
     statistics_dict["opea_service@retriever_arangodb"].append_latency(time.time() - start, None)
 
