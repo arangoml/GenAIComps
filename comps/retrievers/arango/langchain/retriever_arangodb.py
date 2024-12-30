@@ -115,7 +115,7 @@ async def retrieve(
                 LET neighborhood = (
                     FOR v, e, p IN {min}..{max} ANY doc GRAPH @graph OPTIONS {{uniqueVertices: 'global'}}
                         FILTER PARSE_IDENTIFIER(v._id).collection != '{ARANGO_COLLECTION_NAME}'
-                        RETURN p
+                        RETURN {{v, e}}
                 )
 
                 RETURN {{[doc._key]: neighborhood}}
