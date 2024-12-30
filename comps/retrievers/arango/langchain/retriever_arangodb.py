@@ -134,7 +134,7 @@ async def retrieve(
                         RETURN p
                 )
 
-                RETURN {[doc._key]: neighborhood}
+                RETURN {{[doc._key]: neighborhood}}
         """
 
         bind_vars = {
