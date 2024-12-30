@@ -83,24 +83,8 @@ async def retrieve(
     k = input.k
 
     if input.search_type == "similarity":
-        if not input.embedding:
-            raise ValueError("Embedding must be provided for similarity retriever")
-
-        search_res = await vector_db.asimilarity_search_by_vector(
+        search_res = await vector_db.asimilarity_search(
             query=query, embedding=embedding, k=k, use_approx=use_approx
-        )
-    elif input.search_type == "similarity_distance_threshold":
-        if input.distance_threshold is None:
-            raise ValueError("distance_threshold must be provided for similarity_distance_threshold retriever")
-        if not embedding:
-            raise ValueError("Embedding must not be None for similarity_distance_threshold retriever")
-
-        search_res = await vector_db.asimilarity_search_by_vector(
-            query=query,
-            embedding=embedding,
-            k=k,
-            distance_threshold=input.distance_threshold,
-            use_approx=use_approx,
         )
     elif input.search_type == "similarity_score_threshold":
         docs_and_similarities = await vector_db.asimilarity_search_with_relevance_scores(
