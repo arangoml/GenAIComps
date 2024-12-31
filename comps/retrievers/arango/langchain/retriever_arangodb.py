@@ -61,6 +61,56 @@ logger = CustomLogger("retriever_arangodb")
 logflag = os.getenv("LOGFLAG", False)
 
 
+def fetch_neighborhoods(
+    keys: list[str],
+    neighborhoods: dict[str, Any],
+    graph_name: str,
+    source_collection_name: str,
+    max_depth: int,
+) -> None:
+    """Fetch neighborhoods of source documents. Updates the neighborhoods dictionary in-place."""
+    if not vector_db.db.has_graph(graph_name):
+        logger.error("Graph not found in database.")
+        return
+
+    graph = vector_db.db.graph(graph_name)
+
+    if not graph.has_edge_collection(f"{graph_name}_HAS_SOURCE"):
+        logger.error(f"Edge collection '{graph_name}_HAS_SOURCE' not found in graph.")
+        return
+
+    if not graph.has_edge_collection(f"{graph_name}_LINKS_TO"):
+        logger.error(f"Edge collection '{graph_name}_LINKS_TO' not found in graph.")
+        return
+
+    if max_depth < 1:
+        max_depth = 1
+
+    # TODO: Consider using general `GRAPH` syntax instead of specific edge collections...
+    aql = f"""
+        FOR doc IN @@collection
+            FILTER doc._key IN @keys
+
+            LET entity_neighborhood = (
+                FOR v1, e1, p1 IN 1..1 INBOUND doc {graph_name}_HAS_SOURCE
+                    FOR v2, e2, p2 IN 1..{max_depth} ANY v1 {graph_name}_LINKS_TO
+                        RETURN p2
+            )
+
+            RETURN {{[doc._key]: entity_neighborhood}}
+    """
+
+    bind_vars = {
+        "@collection": source_collection_name,
+        "keys": keys,
+    }
+
+    cursor = vector_db.db.aql.execute(aql, bind_vars=bind_vars)
+
+    for doc in cursor:
+        neighborhoods.update(doc)
+
+
 @register_microservice(
     name="opea_service@retriever_arangodb",
     service_type=ServiceType.RETRIEVER,
@@ -74,63 +124,48 @@ async def retrieve(
 ) -> Union[SearchedDoc, RetrievalResponse, ChatCompletionRequest]:
     if logflag:
         logger.info(input)
+
     start = time.time()
 
-    use_approx = ARANGO_USE_APPROX_SEARCH
     query = input.text if isinstance(input, EmbedDoc) else input.input
     embedding = input.embedding if isinstance(input.embedding, list) else None
-    k = input.k
 
-    if input.search_type == "similarity":
-        search_res = await vector_db.asimilarity_search(query=query, embedding=embedding, k=k, use_approx=use_approx)
-    elif input.search_type == "similarity_score_threshold":
+    if input.search_type == "similarity_score_threshold":
         docs_and_similarities = await vector_db.asimilarity_search_with_relevance_scores(
-            query=query, embedding=embedding, k=k, score_threshold=input.score_threshold, use_approx=use_approx
+            query=query,
+            embedding=embedding,
+            k=input.k,
+            score_threshold=input.score_threshold,
+            use_approx=ARANGO_USE_APPROX_SEARCH,
         )
         search_res = [doc for doc, _ in docs_and_similarities]
     elif input.search_type == "mmr":
         search_res = await vector_db.amax_marginal_relevance_search(
             query=query,
             embedding=embedding,
-            k=k,
+            k=input.k,
             fetch_k=input.fetch_k,
             lambda_mult=input.lambda_mult,
-            use_approx=use_approx,
+            use_approx=ARANGO_USE_APPROX_SEARCH,
         )
     else:
-        raise ValueError(f"Search Type '{input.search_type}' not valid")
+        # Default to basic similarity search
+        search_res = await vector_db.asimilarity_search(
+            query=query,
+            embedding=embedding,
+            k=input.k,
+            use_approx=ARANGO_USE_APPROX_SEARCH,
+        )
 
     neighborhoods = {}
     if ARANGO_TRAVERSAL_GRAPH_NAME:
-        keys = [r.id for r in search_res]
-
-        if ARANGO_TRAVERSAL_MAX_DEPTH < 2:
-            ARANGO_TRAVERSAL_MAX_DEPTH = 2
-
-        aql = f"""
-            FOR doc IN @@collection
-                FILTER doc._key IN @keys
-
-                LET neighborhood = (
-                    FOR v, e, p IN 2..{ARANGO_TRAVERSAL_MAX_DEPTH} ANY doc
-                    GRAPH @graph OPTIONS {{uniqueVertices: 'global', order: 'bfs'}}
-                        FILTER PARSE_IDENTIFIER(v._id).collection != '{ARANGO_COLLECTION_NAME}'
-                        RETURN {{v, e}}
-                )
-
-                RETURN {{[doc._key]: neighborhood}}
-        """
-
-        bind_vars = {
-            "@collection": ARANGO_COLLECTION_NAME,
-            "keys": keys,
-            "graph": ARANGO_TRAVERSAL_GRAPH_NAME,
-        }
-
-        cursor = vector_db.db.aql.execute(aql, bind_vars=bind_vars)
-
-        for doc in cursor:
-            neighborhoods.update(doc)
+        fetch_neighborhoods(
+            neighborhoods,
+            [r.id for r in search_res],
+            ARANGO_TRAVERSAL_GRAPH_NAME,
+            ARANGO_COLLECTION_NAME,
+            ARANGO_TRAVERSAL_MAX_DEPTH,
+        )
 
     # return different response format
     retrieved_docs: Union[list[ArangoTextDoc], list[ArangoRetrievalResponseData]] = []
