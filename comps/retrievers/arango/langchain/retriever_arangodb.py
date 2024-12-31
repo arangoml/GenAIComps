@@ -17,7 +17,6 @@ from config import (
     ARANGO_TEXT_FIELD,
     ARANGO_TRAVERSAL_GRAPH_NAME,
     ARANGO_TRAVERSAL_MAX_DEPTH,
-    ARANGO_TRAVERSAL_MIN_DEPTH,
     ARANGO_URL,
     ARANGO_USE_APPROX_SEARCH,
     ARANGO_USERNAME,
@@ -83,9 +82,7 @@ async def retrieve(
     k = input.k
 
     if input.search_type == "similarity":
-        search_res = await vector_db.asimilarity_search(
-            query=query, embedding=embedding, k=k, use_approx=use_approx
-        )
+        search_res = await vector_db.asimilarity_search(query=query, embedding=embedding, k=k, use_approx=use_approx)
     elif input.search_type == "similarity_score_threshold":
         docs_and_similarities = await vector_db.asimilarity_search_with_relevance_scores(
             query=query, embedding=embedding, k=k, score_threshold=input.score_threshold, use_approx=use_approx
@@ -106,14 +103,17 @@ async def retrieve(
     neighborhoods = {}
     if ARANGO_TRAVERSAL_GRAPH_NAME:
         keys = [r.id for r in search_res]
-        min, max = ARANGO_TRAVERSAL_MIN_DEPTH, ARANGO_TRAVERSAL_MAX_DEPTH
+
+        if ARANGO_TRAVERSAL_MAX_DEPTH < 2:
+            ARANGO_TRAVERSAL_MAX_DEPTH = 2
 
         aql = f"""
             FOR doc IN @@collection
                 FILTER doc._key IN @keys
 
                 LET neighborhood = (
-                    FOR v, e, p IN {min}..{max} ANY doc GRAPH @graph OPTIONS {{uniqueVertices: 'global'}}
+                    FOR v, e, p IN 2..{ARANGO_TRAVERSAL_MAX_DEPTH} ANY doc
+                    GRAPH @graph OPTIONS {{uniqueVertices: 'global', order: 'bfs'}}
                         FILTER PARSE_IDENTIFIER(v._id).collection != '{ARANGO_COLLECTION_NAME}'
                         RETURN {{v, e}}
                 )
@@ -183,7 +183,6 @@ if __name__ == "__main__":
     if OPENAI_API_KEY and OPENAI_EMBED_MODEL:
         # Use OpenAI embeddings
         embeddings = OpenAIEmbeddings(model=OPENAI_EMBED_MODEL, dimensions=ARANGO_EMBED_DIMENSION)
-
     elif EMBED_ENDPOINT and HUGGINGFACEHUB_API_TOKEN:
         # create embeddings using TEI endpoint service
         embeddings = HuggingFaceHubEmbeddings(model=EMBED_ENDPOINT, huggingfacehub_api_token=HUGGINGFACEHUB_API_TOKEN)
