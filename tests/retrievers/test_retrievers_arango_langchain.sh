@@ -52,11 +52,10 @@ function start_service() {
     sleep 30s
     export TEI_EMBEDDING_ENDPOINT="http://${ip_address}:${tei_endpoint}"
 
-    retriever_port=5435
     # unset http_proxy
     export no_proxy="localhost,127.0.0.1,"${ip_address}
     docker run -d --name="test-comps-retriever-arango-server" \
-    -p ${retriever_port}:7000 \
+    -p 7000:7000 \
     --ipc=host \
     -e http_proxy=$http_proxy \
     -e https_proxy=$https_proxy \
@@ -73,10 +72,9 @@ function start_service() {
 }
 
 function validate_microservice() {
-    retriever_port=5435
     export PATH="${HOME}/miniforge3/bin:$PATH"
     source activate
-    URL="http://${ip_address}:$retriever_port/v1/retrieval"
+    URL="http://${ip_address}:7000/v1/retrieval"
 
     test_embedding="[0.1, 0.2, 0.3, 0.4, 0.5]"
     HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST -d "{\"text\":\"test\",\"embedding\":${test_embedding}}" -H 'Content-Type: application/json' "$URL")
