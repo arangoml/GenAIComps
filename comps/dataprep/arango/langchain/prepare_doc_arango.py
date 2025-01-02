@@ -222,7 +222,7 @@ def ingest_data_to_arango(doc_path: DocPath, graph_name: str, create_embeddings:
         if isinstance(table_chunks, list):
             chunks = chunks + table_chunks
     if logflag:
-        logger.info("Done preprocessing. Created ", len(chunks), " chunks of the original file.")
+        logger.info(f"Done preprocessing. Created {len(chunks)} chunks of the original file.")
 
     ################################
     # Graph generation & insertion #
