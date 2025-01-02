@@ -134,6 +134,12 @@ def ingest_data_to_arango(doc_path: DocPath, graph_name: str, generate_chunk_emb
     # Graph generation & insertion #
     ################################
 
+    graph = ArangoGraph(
+        db=db,
+        include_examples=False,
+        generate_schema_on_init=False,
+    )
+
     for text in chunks:
         document = Document(page_content=text)
         graph_doc = llm_transformer.process_response(document)
@@ -334,11 +340,5 @@ if __name__ == "__main__":
         sys_db.create_database(ARANGO_DB_NAME)
 
     db = client.db(name=ARANGO_DB_NAME, username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
-
-    graph = ArangoGraph(
-        db=db,
-        include_examples=False,
-        generate_schema_on_init=False,
-    )
 
     opea_microservices["opea_service@prepare_doc_arango"].start()

@@ -130,6 +130,17 @@ async def retrieve(
     query = input.text if isinstance(input, EmbedDoc) else input.input
     embedding = input.embedding if isinstance(input.embedding, list) else None
 
+    vector_db = ArangoVector(
+        embedding=embeddings,
+        embedding_dimension=ARANGO_EMBED_DIMENSION,
+        database=db,
+        collection_name=ARANGO_COLLECTION_NAME,
+        embedding_field=ARANGO_EMBBEDDING_FIELD,
+        text_field=ARANGO_TEXT_FIELD,
+        distance_strategy=ARANGO_DISTANCE_STRATEGY,
+        num_centroids=ARANGO_NUM_CENTROIDS,
+    )
+
     if input.search_type == "similarity_score_threshold":
         docs_and_similarities = await vector_db.asimilarity_search_with_relevance_scores(
             query=query,
@@ -232,16 +243,5 @@ if __name__ == "__main__":
         sys_db.create_database(ARANGO_DB_NAME)
 
     db = client.db(name=ARANGO_DB_NAME, username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
-
-    vector_db = ArangoVector(
-        embedding=embeddings,
-        embedding_dimension=ARANGO_EMBED_DIMENSION,
-        database=db,
-        collection_name=ARANGO_COLLECTION_NAME,
-        embedding_field=ARANGO_EMBBEDDING_FIELD,
-        text_field=ARANGO_TEXT_FIELD,
-        distance_strategy=ARANGO_DISTANCE_STRATEGY,
-        num_centroids=ARANGO_NUM_CENTROIDS,
-    )
 
     opea_microservices["opea_service@retriever_arangodb"].start()
