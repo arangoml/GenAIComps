@@ -23,8 +23,8 @@ ARANGO_TRAVERSAL_GRAPH_NAME = os.getenv("ARANGO_TRAVERSAL_GRAPH_NAME")
 ARANGO_TRAVERSAL_MAX_DEPTH = os.getenv("ARANGO_TRAVERSAL_MAX_DEPTH", 1)
 
 # Embedding configuration
-EMBED_MODEL = os.getenv("EMBED_MODEL", "BAAI/bge-base-en-v1.5")
-EMBED_ENDPOINT = os.getenv("TEI_EMBEDDING_ENDPOINT", "")
+TEI_EMBED_MODEL = os.getenv("TEI_EMBED_MODEL", "BAAI/bge-base-en-v1.5")
+TEI_EMBEDDING_ENDPOINT = os.getenv("TEI_EMBEDDING_ENDPOINT", "")
 HUGGINGFACEHUB_API_TOKEN = os.getenv("HUGGINGFACEHUB_API_TOKEN")
 
 # OpenAI configuration (alternative to TEI & local model)

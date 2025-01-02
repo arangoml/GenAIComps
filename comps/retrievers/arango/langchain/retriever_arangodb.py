@@ -20,8 +20,8 @@ from config import (
     ARANGO_URL,
     ARANGO_USE_APPROX_SEARCH,
     ARANGO_USERNAME,
-    EMBED_ENDPOINT,
-    EMBED_MODEL,
+    TEI_EMBEDDING_ENDPOINT,
+    TEI_EMBED_MODEL,
     HUGGINGFACEHUB_API_TOKEN,
     OPENAI_API_KEY,
     OPENAI_EMBED_MODEL,
@@ -231,12 +231,12 @@ if __name__ == "__main__":
     if OPENAI_API_KEY and OPENAI_EMBED_MODEL:
         # Use OpenAI embeddings
         embeddings = OpenAIEmbeddings(model=OPENAI_EMBED_MODEL, dimensions=ARANGO_EMBEDDING_DIMENSION)
-    elif EMBED_ENDPOINT and HUGGINGFACEHUB_API_TOKEN:
+    elif TEI_EMBEDDING_ENDPOINT and HUGGINGFACEHUB_API_TOKEN:
         # create embeddings using TEI endpoint service
-        embeddings = HuggingFaceHubEmbeddings(model=EMBED_ENDPOINT, huggingfacehub_api_token=HUGGINGFACEHUB_API_TOKEN)
+        embeddings = HuggingFaceHubEmbeddings(model=TEI_EMBEDDING_ENDPOINT, huggingfacehub_api_token=HUGGINGFACEHUB_API_TOKEN)
     else:
         # create embeddings using local embedding model
-        embeddings = HuggingFaceBgeEmbeddings(model_name=EMBED_MODEL)
+        embeddings = HuggingFaceBgeEmbeddings(model_name=TEI_EMBED_MODEL)
 
     client = ArangoClient(hosts=ARANGO_URL)
     sys_db = client.db(name="_system", username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)

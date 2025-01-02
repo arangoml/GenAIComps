@@ -134,8 +134,8 @@ ArangoDB Traversal configuration
 - `ARANGO_TRAVERSAL_MAX_DEPTH`: The maximum depth to traverse the graph. Defaults to `1`.
 
 Embedding Configuration
-- `EMBED_MODEL`: The model to use for the TEI service. Defaults to `BAAI/bge-base-en-v1.5`.
-- `EMBED_ENDPOINT`: The endpoint for the TEI service.
+- `TEI_EMBED_MODEL`: The model to use for the TEI service. Defaults to `BAAI/bge-base-en-v1.5`.
+- `TEI_EMBEDDING_ENDPOINT`: The endpoint for the TEI service.
 - `HUGGINGFACEHUB_API_TOKEN`: The API token for the Hugging Face Hub.
 
 OpenAI Configuration:

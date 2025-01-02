@@ -60,6 +60,13 @@ function start_service() {
     --ipc=host \
     -e http_proxy=$http_proxy \
     -e https_proxy=$https_proxy \
+    -e ARANGO_URL=$ARANGO_URL \
+    -e ARANGO_USERNAME=$ARANGO_USERNAME \
+    -e ARANGO_PASSWORD=$ARANGO_PASSWORD \
+    -e ARANGO_DB_NAME=$ARANGO_DB_NAME \
+    -e ARANGO_COLLECTION_NAME=$ARANGO_COLLECTION_NAME \
+    -e ARANGO_EMBEDDING_DIMENSION=$ARANGO_EMBEDDING_DIMENSION \
+    -e TEI_EMBEDDING_ENDPOINT=$TEI_EMBEDDING_ENDPOINT \
     opea/retriever-arango:comps
 
     sleep 1m
