@@ -1,6 +1,6 @@
 # Dataprep Microservice with ArangoDB
 
-## 🚀Start Microservice with Python
+## 🚀 1. Start Microservice with Python
 
 ### Install Requirements
 
@@ -31,27 +31,27 @@ export ARANGO_DB_NAME=${your_db_name}
 export PYTHONPATH=${path_to_comps}
 ```
 
-### Start Document Preparation Microservice for ArangoDB with Python Script
+See below for additional environment variables that can be set.
 
-Start document preparation microservice for ArangoDB with below command.
+### Start Dataprep Service
 
 ```bash
 python prepare_doc_arango.py
 ```
 
-## 🚀Start Microservice with Docker
+## 🚀 2. Start Microservice with Docker
 
 ### Build Docker Image
 
 ```bash
-cd ../../../../
+cd /your/path/to/GenAIComps
 docker build -t opea/dataprep-arango:latest --build-arg https_proxy=$https_proxy --build-arg http_proxy=$http_proxy -f comps/dataprep/arango/langchain/Dockerfile .
 ```
 
 ### Run Docker with CLI
 
 ```bash
-docker run -d --name="dataprep-arango-server" -p 6007:6007 --ipc=host -e http_proxy=$http_proxy -e https_proxy=$https_proxy opea/dataprep-arango:latest
+docker run -d --name="dataprep-arango-server" -p 6007:6007 --ipc=host -e http_proxy=$http_proxy -e https_proxy=$https_proxy -e ... opea/dataprep-arango:latest
 ```
 
 ### Run Docker with Docker Compose
@@ -61,13 +61,9 @@ cd comps/dataprep/arango/langchain
 docker compose -f docker-compose-dataprep-arango.yaml up -d
 ```
 
-## Invoke Microservice
+## 🚀 3. Consume Retriever Service
 
-Once document preparation microservice for ArangoDB is started, user can use below command to invoke the microservice to convert the document to embedding and save to the database.
-
-After the service is complete a Graph is created in ArangoDB. The default graph name is `Graph`, you can specify the graph name by `-F "graph_name=${your_graph_name}"` in the curl command.
-
-By default, the microservice will create embeddings for the documents if embedding environment variables are specified. You can specify `-F "create_embeddings=false"` to skip the embedding creation.
+An ArangoDB Graph is created from the documents provided to the microservice. The microservice will extract entities from the documents and create nodes and relationships in the graph based on the entities extracted. The microservice will also create embeddings for the documents if embedding environment variables are specified.
 
 ```bash
 curl -X POST \
@@ -77,7 +73,11 @@ curl -X POST \
     http://localhost:6007/v1/dataprep
 ```
 
-You can specify chunk_size and chunk_size by the following commands.
+You can specify the graph name with `-F "graph_name=${your_graph_name}"` in the curl command.
+
+By default, the microservice will create embeddings for the documents if embedding environment variables are specified. You can specify `-F "create_embeddings=false"` to skip document embedding creation.
+
+You can also specify the `chunk_size` and `chunk_overlap` with the following parameters:
 
 ```bash
 curl -X POST \
@@ -89,11 +89,11 @@ curl -X POST \
     http://localhost:6007/v1/dataprep
 ```
 
-We support table extraction from pdf documents. You can specify process_table and table_strategy by the following commands. "table_strategy" refers to the strategies to understand tables for table retrieval. As the setting progresses from "fast" to "hq" to "llm," the focus shifts towards deeper table understanding at the expense of processing speed. The default strategy is "fast".
+We support table extraction from pdf documents. You can specify `process_table` and `table_strategy` with the following parameters:
+- `table_strategy` refers to the strategies to understand tables for table retrieval. As the setting progresses from `"fast"` to `"hq"` to `"llm"`, the focus shifts towards deeper table understanding at the expense of processing speed. The default strategy is `"fast"`.
+- `process_table` refers to whether to process tables in the document. The default value is `False`.
 
-Note: If you specify "table_strategy=llm", You should first start TGI Service, please refer to 1.2.1, 1.3.1 in https://github.com/opea-project/GenAIComps/tree/main/comps/llms/README.md, and then `export TGI_LLM_ENDPOINT="http://${your_ip}:8008"`.
-
-For ensure the quality and comprehensiveness of the extracted entities, we recommend to use `gpt-4o` as the default model for parsing the document. To enable the openai service, please `export OPENAI_API_KEY=xxxx` before using this services.
+Note: If you specify `"table_strategy=llm"`, you should first start the TGI Service. Please refer to 1.2.1, 1.3.1 in https://github.com/opea-project/GenAIComps/tree/main/comps/llms/README.md, and then `export TGI_LLM_ENDPOINT="http://${your_ip}:8008"`.
 
 ```bash
 curl -X POST \
@@ -107,13 +107,15 @@ curl -X POST \
 
 ---
 
-Additional options that can be specified from the environment variables are as follows (default values are in the config.py file):
+Additional options that can be specified from the environment variables are as follows (default values are also in the `config.py` file):
 
-ArangoDB Configuration:
+ArangoDB Connection configuration
 - `ARANGO_URL`: The URL for the ArangoDB service.
 - `ARANGO_USERNAME`: The username for the ArangoDB service.
 - `ARANGO_PASSWORD`: The password for the ArangoDB service.
 - `ARANGO_DB_NAME`: The name of the database to use for the ArangoDB service.
+
+ArangoDB Graph Insertion configuration
 - `USE_ONE_ENTITY_COLLECTION`: If set to True, the microservice will use a single entity collection for all nodes. If set to False, the microservice will use a separate collection by node type. Defaults to `True`.
 - `INSERT_ASYNC`: If set to True, the microservice will insert the data into ArangoDB asynchronously. Defaults to `False`.
 - `ARANGO_BATCH_SIZE`: The batch size for the microservice to insert the data. Defaults to `500`.
@@ -127,7 +129,7 @@ Text Generation Inference Configuration
 - `TGI_LLM_TIMEOUT`: The timeout for the TGI service. Defaults to `600`.
 
 Text Embeddings Inferencing Configuration
-**Note**: This is optional functionality to generate embeddings for text chunks. 
+**Note**: This is optional functionality to generate embeddings for documents (i.e text chunks). 
 - `TEI_EMBEDDING_ENDPOINT`: The endpoint for the TEI service.
 - `HUGGINGFACEHUB_API_TOKEN`: The API token for the Hugging Face Hub.
 - `TEI_EMBED_MODEL`: The model to use for the TEI service. Defaults to `BAAI/bge-base-en-v1.5`.
