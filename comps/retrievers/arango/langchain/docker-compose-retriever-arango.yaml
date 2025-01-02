@@ -1,0 +1,54 @@
+# Copyright (C) 2024 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+
+version: "3"
+services:
+  arango-vector-db:
+    image: jbajic/arango-preview:vector-index-preview-5
+    container_name: arango-vector
+    ports:
+      - "8529:8529"
+    environment:
+      ARANGO_ROOT_PASSWORD: ${ARANGO_PASSWORD}
+  tei-embedding-service:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.5
+    container_name: tei-embedding-server
+    ports:
+      - "6006:80"
+    volumes:
+      - "./data:/data"
+    shm_size: 1g
+    environment:
+      no_proxy: ${no_proxy}
+      http_proxy: ${http_proxy}
+      https_proxy: ${https_proxy}
+      HUGGINGFACEHUB_API_TOKEN: ${HUGGINGFACEHUB_API_TOKEN}
+    command: --model-id ${EMBEDDING_MODEL_ID} --auto-truncate
+  retriever-arango:
+    image: opea/retriever-arango:latest
+    container_name: retriever-arango-server
+    depends_on:
+      - arango-vector-db
+      - tei-embedding-service
+    ports:
+      - " 7000:7000"
+    ipc: host
+    environment:
+      no_proxy: ${no_proxy}
+      http_proxy: ${http_proxy}
+      https_proxy: ${https_proxy}
+      ARANGO_URL: ${ARANGO_URL}
+      ARANGO_USERNAME: ${ARANGO_USERNAME}
+      ARANGO_PASSWORD: ${ARANGO_PASSWORD}
+      ARANGO_DB_NAME: ${ARANGO_DB_NAME}
+      ARANGO_COLLECTION_NAME: ${ARANGO_COLLECTION_NAME}
+      ARANGO_EMBEDDING_DIMENSION: ${ARANGO_EMBEDDING_DIMENSION}
+      TEI_EMBED_MODEL: ${TEI_EMBED_MODEL}
+      TEI_EMBEDDING_ENDPOINT: ${TEI_EMBEDDING_ENDPOINT}
+      HUGGINGFACEHUB_API_TOKEN: ${HUGGINGFACEHUB_API_TOKEN}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    restart: unless-stopped
+
+networks:
+  default:
+    driver: bridge
