@@ -21,11 +21,6 @@ function build_docker_images() {
     docker run -d -p 8529:8529 --name=test-comps-arango -e ARANGO_ROOT_PASSWORD=$ARANGO_PASSWORD arangodb/arangodb:latest
     sleep 1m
 
-    # Delete ARANGOC_COLLECTION_NAME (ignore missing)
-    curl -X DELETE --header 'accept: application/json' \
-    "${ARANGO_URL}/_db/${ARANGO_DB_NAME}/_api/collection/${ARANGO_COLLECTION_NAME}" \
-    -u ${ARANGO_USERNAME}:${ARANGO_PASSWORD} || true
-
     # Create ARANGO_COLLECTION_NAME
     curl -X POST --header 'accept: application/json' \
     --header 'Content-Type: application/json' \
