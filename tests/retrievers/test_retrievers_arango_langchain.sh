@@ -8,10 +8,37 @@ WORKPATH=$(dirname "$PWD")
 LOG_PATH="$WORKPATH/tests"
 ip_address=$(hostname -I | awk '{print $1}')
 
+export ARANGO_URL=${ARANGO_URL:-"http://${ip_address}:8529"} 
+export ARANGO_USERNAME=${ARANGO_USERNAME:-"root"}
+export ARANGO_PASSWORD=${ARANGO_PASSWORD:-"test"}
+export ARANGO_DB_NAME=${ARANGO_DB_NAME:-"_system"}
+export ARANGO_COLLECTION_NAME=${ARANGO_COLLECTION_NAME:-"test"}
+export ARANGO_EMBEDDING_DIMENSION=${ARANGO_EMBEDDING_DIMENSION:-256}
+
 function build_docker_images() {
     cd $WORKPATH
-    docker run -d -p 7474:7474 -p 7687:7687 -v ./data:/data -v ./plugins:/plugins --name test-comps-arango-apoc1 -e ARANGO_AUTH=arango/password -e ARANGO_PLUGINS=\[\"apoc\"\] arango:latest
-    sleep 30s
+    echo $(pwd)
+    docker run -d -p 8529:8529 --name=test-comps-arango -e ARANGO_ROOT_PASSWORD=$ARANGO_PASSWORD arangodb/arangodb:latest
+    sleep 1m
+
+    # Delete ARANGOC_COLLECTION_NAME (ignore missing)
+    curl -X DELETE --header 'accept: application/json' \
+    "${ARANGO_URL}/_db/${ARANGO_DB_NAME}/_api/collection/${ARANGO_COLLECTION_NAME}" \
+    -u ${ARANGO_USERNAME}:${ARANGO_PASSWORD} || true
+
+    # Create ARANGO_COLLECTION_NAME
+    curl -X POST --header 'accept: application/json' \
+    --header 'Content-Type: application/json' \
+    --data '{"name": "'${ARANGO_COLLECTION_NAME}'", "type": 2, "waitForSync": true}' \
+    "${ARANGO_URL}/_db/${ARANGO_DB_NAME}/_api/collection" \
+    -u ${ARANGO_USERNAME}:${ARANGO_PASSWORD}
+
+    # Insert data into arango: {text: "test", embedding: [0.1, 0.2, 0.3, 0.4, 0.5]}
+    curl -X POST --header 'accept: application/json' \
+    --header 'Content-Type: application/json' \
+    --data '{"text": "test", "embedding": [0.1, 0.2, 0.3, 0.4, 0.5]}' \
+    "${ARANGO_URL}/_db/${ARANGO_DB_NAME}/_api/document/${ARANGO_COLLECTION_NAME}" \
+    -u ${ARANGO_USERNAME}:${ARANGO_PASSWORD}
 
     docker build --no-cache -t opea/retriever-arango:comps --build-arg https_proxy=$https_proxy --build-arg http_proxy=$http_proxy -f comps/retrievers/arango/langchain/Dockerfile .
     if [ $? -ne 0 ]; then
@@ -30,15 +57,15 @@ function start_service() {
     sleep 30s
     export TEI_EMBEDDING_ENDPOINT="http://${ip_address}:${tei_endpoint}"
 
-    # Arango retriever
-    export ARANGO_URL="http://${ip_address}:8529"
-    export ARANGO_USERNAME="root"
-    export ARANGO_PASSWORD="test"
-    export ARANGO_EMBEDDING_DIMENSION=768
     retriever_port=5435
     # unset http_proxy
     export no_proxy="localhost,127.0.0.1,"${ip_address}
-    docker run -d --name="test-comps-retriever-arango-server" -p ${retriever_port}:7000 --ipc=host -e http_proxy=$http_proxy -e https_proxy=$https_proxy -e ARANGO_URL="http://${ip_address}:8529" -e ARANGO_USERNAME="root" -e ARANGO_PASSWORD="test" opea/retriever-arango:comps
+    docker run -d --name="test-comps-retriever-arango-server" \
+    -p ${retriever_port}:7000 \
+    --ipc=host \
+    -e http_proxy=$http_proxy \
+    -e https_proxy=$https_proxy \
+    opea/retriever-arango:comps
 
     sleep 1m
 }
@@ -49,8 +76,7 @@ function validate_microservice() {
     source activate
     URL="http://${ip_address}:$retriever_port/v1/retrieval"
 
-    test_embedding=$(python -c "import random; embedding = [random.uniform(-1, 1) for _ in range(768)]; print(embedding)")
-
+    test_embedding="[0.1, 0.2, 0.3, 0.4, 0.5]"
     HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST -d "{\"text\":\"test\",\"embedding\":${test_embedding}}" -H 'Content-Type: application/json' "$URL")
     if [ "$HTTP_STATUS" -eq 200 ]; then
         echo "[ retriever ] HTTP status is 200. Checking content..."
