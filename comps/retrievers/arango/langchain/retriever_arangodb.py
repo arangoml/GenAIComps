@@ -10,8 +10,8 @@ from config import (
     ARANGO_COLLECTION_NAME,
     ARANGO_DB_NAME,
     ARANGO_DISTANCE_STRATEGY,
-    ARANGO_EMBBEDDING_FIELD,
-    ARANGO_EMBED_DIMENSION,
+    ARANGO_EMBEDDING_DIMENSION,
+    ARANGO_EMBEDDING_FIELD,
     ARANGO_NUM_CENTROIDS,
     ARANGO_PASSWORD,
     ARANGO_TEXT_FIELD,
@@ -62,6 +62,7 @@ logflag = os.getenv("LOGFLAG", False)
 
 
 def fetch_neighborhoods(
+    vector_db: ArangoVector,
     keys: list[str],
     neighborhoods: dict[str, Any],
     graph_name: str,
@@ -132,10 +133,10 @@ async def retrieve(
 
     vector_db = ArangoVector(
         embedding=embeddings,
-        embedding_dimension=ARANGO_EMBED_DIMENSION,
+        embedding_dimension=ARANGO_EMBEDDING_DIMENSION,
         database=db,
         collection_name=ARANGO_COLLECTION_NAME,
-        embedding_field=ARANGO_EMBBEDDING_FIELD,
+        embedding_field=ARANGO_EMBEDDING_FIELD,
         text_field=ARANGO_TEXT_FIELD,
         distance_strategy=ARANGO_DISTANCE_STRATEGY,
         num_centroids=ARANGO_NUM_CENTROIDS,
@@ -171,6 +172,7 @@ async def retrieve(
     neighborhoods = {}
     if ARANGO_TRAVERSAL_GRAPH_NAME:
         fetch_neighborhoods(
+            vector_db,
             neighborhoods,
             [r.id for r in search_res],
             ARANGO_TRAVERSAL_GRAPH_NAME,
@@ -223,12 +225,12 @@ async def retrieve(
 
 if __name__ == "__main__":
 
-    if not ARANGO_EMBED_DIMENSION:
+    if not ARANGO_EMBEDDING_DIMENSION:
         raise ValueError("EMBED_DIMENSION must specified in advance.")
 
     if OPENAI_API_KEY and OPENAI_EMBED_MODEL:
         # Use OpenAI embeddings
-        embeddings = OpenAIEmbeddings(model=OPENAI_EMBED_MODEL, dimensions=ARANGO_EMBED_DIMENSION)
+        embeddings = OpenAIEmbeddings(model=OPENAI_EMBED_MODEL, dimensions=ARANGO_EMBEDDING_DIMENSION)
     elif EMBED_ENDPOINT and HUGGINGFACEHUB_API_TOKEN:
         # create embeddings using TEI endpoint service
         embeddings = HuggingFaceHubEmbeddings(model=EMBED_ENDPOINT, huggingfacehub_api_token=HUGGINGFACEHUB_API_TOKEN)

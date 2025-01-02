@@ -34,7 +34,7 @@ function start_service() {
     export ARANGO_URL="http://${ip_address}:8529"
     export ARANGO_USERNAME="root"
     export ARANGO_PASSWORD="test"
-    export ARANGO_EMBED_DIMENSION=768
+    export ARANGO_EMBEDDING_DIMENSION=768
     retriever_port=5435
     # unset http_proxy
     export no_proxy="localhost,127.0.0.1,"${ip_address}
