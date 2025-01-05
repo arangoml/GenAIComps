@@ -57,7 +57,7 @@ class ArangoRetrievalResponseData(RetrievalResponseData):
     neighborhood: Optional[list[dict[str, Any]]] = None
 
 
-logger = CustomLogger("retriever_arangodb")
+logger = CustomLogger("retriever_arango")
 logflag = os.getenv("LOGFLAG", False)
 
 
@@ -113,13 +113,13 @@ def fetch_neighborhoods(
 
 
 @register_microservice(
-    name="opea_service@retriever_arangodb",
+    name="opea_service@retriever_arango",
     service_type=ServiceType.RETRIEVER,
     endpoint="/v1/retrieval",
     host="0.0.0.0",
     port=7000,
 )
-@register_statistics(names=["opea_service@retriever_arangodb"])
+@register_statistics(names=["opea_service@retriever_arango"])
 async def retrieve(
     input: Union[EmbedDoc, RetrievalRequest, ChatCompletionRequest]
 ) -> Union[SearchedDoc, RetrievalResponse, ChatCompletionRequest]:
@@ -215,7 +215,7 @@ async def retrieve(
         else:
             raise ValueError("Invalid input type: ", type(input))
 
-    statistics_dict["opea_service@retriever_arangodb"].append_latency(time.time() - start, None)
+    statistics_dict["opea_service@retriever_arango"].append_latency(time.time() - start, None)
 
     if logflag:
         logger.info(result)
@@ -246,4 +246,4 @@ if __name__ == "__main__":
 
     db = client.db(name=ARANGO_DB_NAME, username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
 
-    opea_microservices["opea_service@retriever_arangodb"].start()
+    opea_microservices["opea_service@retriever_arango"].start()

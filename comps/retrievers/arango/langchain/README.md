@@ -38,7 +38,7 @@ See below for additional environment variables that can be set.
 ### Start Retriever Service
 
 ```bash
-python retriever_arangodb.py
+python retriever_arango.py
 ```
 
 ## 🚀 2. Start Microservice with Docker
