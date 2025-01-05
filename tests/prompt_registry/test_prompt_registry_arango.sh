@@ -16,7 +16,7 @@ export ARANGO_COLLECTION_NAME=${ARANGO_COLLECTION_NAME:-"test"}
 function build_docker_images() {
     cd $WORKPATH
     echo $(pwd)
-    docker run -d -p 8529:8529 --name=test-comps-arango arangodb/arangodb:latest
+    docker run -d -p 8529:8529 --name=test-comps-arango -e ARANGO_ROOT_PASSWORD=$ARANGO_PASSWORD arangodb/arangodb:latest
 
     docker build --no-cache -t opea/promptregistry-arango-server:comps --build-arg https_proxy=$https_proxy --build-arg http_proxy=$http_proxy -f comps/prompt_registry/arango/Dockerfile .
     if [ $? -ne 0 ]; then

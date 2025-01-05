@@ -19,6 +19,8 @@ from config import (
     INSERT_ASYNC,
     NODE_PROPERTIES,
     OPENAI_API_KEY,
+    OPENAI_CHAT_MODEL,
+    OPENAI_CHAT_TEMPERATURE,
     OPENAI_EMBED_DIMENSIONS,
     OPENAI_EMBED_MODEL,
     RELATIONSHIP_PROPERTIES,
@@ -84,109 +86,12 @@ if SYSTEM_PROMPT_PATH is not None:
         logger.error(f"Could not set custom Prompt: {e}")
 
 
-def ingest_data_to_arango(doc_path: DocPath, graph_name: str, create_embeddings: bool) -> bool:
+def ingest_data_to_arango(doc_path: DocPath, graph_name: str, generate_chunk_embeddings: bool) -> bool:
     """Ingest document to ArangoDB."""
     path = doc_path.path
+
     if logflag:
         logger.info(f"Parsing document {path}.")
-
-    #############################
-    # Text Generation Inference #
-    #############################
-
-    if OPENAI_API_KEY:
-        if logflag:
-            logger.info("OpenAI API Key is set. Verifying its validity...")
-        openai.api_key = OPENAI_API_KEY
-
-        try:
-            openai.models.list()
-            if logflag:
-                logger.info("OpenAI API Key is valid.")
-            llm = ChatOpenAI(temperature=0, model_name="gpt-4o")
-        except openai.error.AuthenticationError:
-            if logflag:
-                logger.info("OpenAI API Key is invalid.")
-        except Exception as e:
-            if logflag:
-                logger.info(f"An error occurred while verifying the API Key: {e}")
-
-    elif TGI_LLM_ENDPOINT:
-        llm = HuggingFaceEndpoint(
-            endpoint_url=TGI_LLM_ENDPOINT,
-            max_new_tokens=TGI_LLM_MAX_NEW_TOKENS,
-            top_k=TGI_LLM_TOP_K,
-            top_p=TGI_LLM_TOP_P,
-            temperature=TGI_LLM_TEMPERATURE,
-            timeout=TGI_LLM_TIMEOUT,
-        )
-    else:
-        raise ValueError("No text generation inference endpoint is set.")
-
-    try:
-        llm_transformer = LLMGraphTransformer(
-            llm=llm,
-            allowed_nodes=ALLOWED_NODES,
-            allowed_relationships=ALLOWED_RELATIONSHIPS,
-            prompt=PROMPT_TEMPLATE,
-            node_properties=NODE_PROPERTIES if NODE_PROPERTIES else False,
-            relationship_properties=RELATIONSHIP_PROPERTIES if RELATIONSHIP_PROPERTIES else False,
-        )
-    except (TypeError, ValueError) as e:
-        if logflag:
-            logger.warning(f"Advanced LLMGraphTransformer failed: {e}")
-        # Fall back to basic config
-        try:
-            llm_transformer = LLMGraphTransformer(llm=llm)
-        except (TypeError, ValueError) as e:
-            if logflag:
-                logger.error(f"Failed to initialize LLMGraphTransformer: {e}")
-            raise
-
-    ########################################
-    # Text Embeddings Inference (optional) #
-    ########################################
-
-    embeddings = None
-    if create_embeddings:
-        if OPENAI_API_KEY:
-            # Use OpenAI embeddings
-            embeddings = OpenAIEmbeddings(
-                model=OPENAI_EMBED_MODEL,
-                dimensions=OPENAI_EMBED_DIMENSIONS,
-            )
-
-        elif TEI_EMBEDDING_ENDPOINT and HUGGINGFACEHUB_API_TOKEN:
-            # Use TEI endpoint service
-            embeddings = HuggingFaceHubEmbeddings(
-                model=TEI_EMBEDDING_ENDPOINT,
-                huggingfacehub_api_token=HUGGINGFACEHUB_API_TOKEN,
-            )
-        elif TEI_EMBED_MODEL:
-            # Use local embedding model
-            embeddings = HuggingFaceBgeEmbeddings(model_name=TEI_EMBED_MODEL)
-        else:
-            if logflag:
-                logger.warning("No embeddings environment variables are set, cannot generate embeddings.")
-            embeddings = None
-
-    ############
-    # ArangoDB #
-    ############
-
-    client = ArangoClient(hosts=ARANGO_URL)
-    sys_db = client.db(name="_system", username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
-
-    if not sys_db.has_database(ARANGO_DB_NAME):
-        sys_db.create_database(ARANGO_DB_NAME)
-
-    db = client.db(name=ARANGO_DB_NAME, username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
-
-    graph = ArangoGraph(
-        db=db,
-        include_examples=False,
-        generate_schema_on_init=False,
-    )
 
     ############
     # Chunking #
@@ -221,6 +126,7 @@ def ingest_data_to_arango(doc_path: DocPath, graph_name: str, create_embeddings:
         table_chunks = get_tables_result(path, doc_path.table_strategy)
         if isinstance(table_chunks, list):
             chunks = chunks + table_chunks
+
     if logflag:
         logger.info(f"Done preprocessing. Created {len(chunks)} chunks of the original file.")
 
@@ -228,7 +134,11 @@ def ingest_data_to_arango(doc_path: DocPath, graph_name: str, create_embeddings:
     # Graph generation & insertion #
     ################################
 
-    generate_chunk_embeddings = embeddings is not None
+    graph = ArangoGraph(
+        db=db,
+        include_examples=False,
+        generate_schema_on_init=False,
+    )
 
     for text in chunks:
         document = Document(page_content=text)
@@ -294,7 +204,7 @@ async def ingest_documents(
                     table_strategy=table_strategy,
                 ),
                 graph_name=graph_name,
-                create_embeddings=create_embeddings,
+                generate_chunk_embeddings=create_embeddings and embeddings is not None,
             )
             uploaded_files.append(save_path)
             if logflag:
@@ -323,7 +233,7 @@ async def ingest_documents(
                         table_strategy=table_strategy,
                     ),
                     graph_name=graph_name,
-                    create_embeddings=create_embeddings,
+                    generate_chunk_embeddings=create_embeddings and embeddings is not None,
                 )
             except json.JSONDecodeError:
                 raise HTTPException(status_code=500, detail="Fail to ingest data into qdrant.")
@@ -340,4 +250,95 @@ async def ingest_documents(
 
 
 if __name__ == "__main__":
+
+    #############################
+    # Text Generation Inference #
+    #############################
+
+    if OPENAI_API_KEY:
+        if logflag:
+            logger.info("OpenAI API Key is set. Verifying its validity...")
+        openai.api_key = OPENAI_API_KEY
+
+        try:
+            openai.models.list()
+            if logflag:
+                logger.info("OpenAI API Key is valid.")
+            llm = ChatOpenAI(temperature=OPENAI_CHAT_TEMPERATURE, model_name=OPENAI_CHAT_MODEL)
+        except openai.error.AuthenticationError:
+            if logflag:
+                logger.info("OpenAI API Key is invalid.")
+        except Exception as e:
+            if logflag:
+                logger.info(f"An error occurred while verifying the API Key: {e}")
+
+    elif TGI_LLM_ENDPOINT:
+        llm = HuggingFaceEndpoint(
+            endpoint_url=TGI_LLM_ENDPOINT,
+            max_new_tokens=TGI_LLM_MAX_NEW_TOKENS,
+            top_k=TGI_LLM_TOP_K,
+            top_p=TGI_LLM_TOP_P,
+            temperature=TGI_LLM_TEMPERATURE,
+            timeout=TGI_LLM_TIMEOUT,
+        )
+    else:
+        raise ValueError("No text generation inference endpoint is set.")
+
+    try:
+        llm_transformer = LLMGraphTransformer(
+            llm=llm,
+            allowed_nodes=ALLOWED_NODES,
+            allowed_relationships=ALLOWED_RELATIONSHIPS,
+            prompt=PROMPT_TEMPLATE,
+            node_properties=NODE_PROPERTIES or False,
+            relationship_properties=RELATIONSHIP_PROPERTIES or False,
+        )
+    except (TypeError, ValueError) as e:
+        if logflag:
+            logger.warning(f"Advanced LLMGraphTransformer failed: {e}")
+        # Fall back to basic config
+        try:
+            llm_transformer = LLMGraphTransformer(llm=llm)
+        except (TypeError, ValueError) as e:
+            if logflag:
+                logger.error(f"Failed to initialize LLMGraphTransformer: {e}")
+            raise
+
+    ########################################
+    # Text Embeddings Inference (optional) #
+    ########################################
+
+    if OPENAI_API_KEY:
+        # Use OpenAI embeddings
+        embeddings = OpenAIEmbeddings(
+            model=OPENAI_EMBED_MODEL,
+            dimensions=OPENAI_EMBED_DIMENSIONS,
+        )
+
+    elif TEI_EMBEDDING_ENDPOINT and HUGGINGFACEHUB_API_TOKEN:
+        # Use TEI endpoint service
+        embeddings = HuggingFaceHubEmbeddings(
+            model=TEI_EMBEDDING_ENDPOINT,
+            huggingfacehub_api_token=HUGGINGFACEHUB_API_TOKEN,
+        )
+    elif TEI_EMBED_MODEL:
+        # Use local embedding model
+        embeddings = HuggingFaceBgeEmbeddings(model_name=TEI_EMBED_MODEL)
+    else:
+        if logflag:
+            logger.warning("No embeddings environment variables are set, cannot generate embeddings.")
+        embeddings = None
+
+    ############
+    # ArangoDB #
+    ############
+
+    client = ArangoClient(hosts=ARANGO_URL)
+    sys_db = client.db(name="_system", username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
+
+    if not sys_db.has_database(ARANGO_DB_NAME):
+        sys_db.create_database(ARANGO_DB_NAME)
+
+    db = client.db(name=ARANGO_DB_NAME, username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
+
     opea_microservices["opea_service@prepare_doc_arango"].start()

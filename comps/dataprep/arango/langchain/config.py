@@ -3,13 +3,13 @@
 
 import os
 
-# ArangoDB configuration
+# ArangoDB Connection configuration
 ARANGO_URL = os.getenv("ARANGO_URL", "http://localhost:8529")
 ARANGO_USERNAME = os.getenv("ARANGO_USERNAME", "root")
 ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "test")
 ARANGO_DB_NAME = os.getenv("ARANGO_DB_NAME", "_system")
 
-# ArangoDB graph configuration
+# ArangoDB Graph Insertion configuration
 USE_ONE_ENTITY_COLLECTION = os.getenv("USE_ONE_ENTITY_COLLECTION", True)
 INSERT_ASYNC = os.getenv("INSERT_ASYNC", False)
 ARANGO_BATCH_SIZE = os.getenv("ARANGO_BATCH_SIZE", 500)
