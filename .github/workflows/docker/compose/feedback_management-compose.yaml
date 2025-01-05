@@ -3,10 +3,10 @@
 
 # this file should be run in the root of the repo
 services:
-  feedbackmanagement-mongo-server:
+  feedbackmanagement:
     build:
       dockerfile: comps/feedback_management/mongo/Dockerfile
-    image: ${REGISTRY:-opea}/feedbackmanagement-mongo-server:${TAG:-latest}
+    image: ${REGISTRY:-opea}/feedbackmanagement:${TAG:-latest}
   feedbackmanagement-arango-server:
     build:
       dockerfile: comps/feedback_management/arango/Dockerfile
