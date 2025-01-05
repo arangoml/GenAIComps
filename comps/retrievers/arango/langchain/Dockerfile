@@ -25,10 +25,10 @@ COPY comps /home/user/comps
 
 RUN pip install --no-cache-dir --upgrade pip setuptools && \
     if [ ${ARCH} = "cpu" ]; then pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu; fi && \
-    pip install --no-cache-dir -r /home/user/comps/retrievers/arangodb/langchain/requirements.txt
+    pip install --no-cache-dir -r /home/user/comps/retrievers/arango/langchain/requirements.txt
 
 ENV PYTHONPATH=$PYTHONPATH:/home/user
 
-WORKDIR /home/user/comps/retrievers/arangodb/langchain
+WORKDIR /home/user/comps/retrievers/arango/langchain
 
-ENTRYPOINT ["python", "retriever_arangodb.py"]
+ENTRYPOINT ["python", "retriever_arango.py"]

@@ -31,7 +31,7 @@ services:
       - arango-vector-db
       - tei-embedding-service
     ports:
-      - " 7000:7000"
+      - "7000:7000"
     ipc: host
     environment:
       no_proxy: ${no_proxy}
