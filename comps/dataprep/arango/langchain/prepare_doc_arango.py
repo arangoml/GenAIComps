@@ -302,7 +302,7 @@ if __name__ == "__main__":
         except (TypeError, ValueError) as e:
             if logflag:
                 logger.error(f"Failed to initialize LLMGraphTransformer: {e}")
-            raise
+            raise e
 
     ########################################
     # Text Embeddings Inference (optional) #
@@ -340,5 +340,7 @@ if __name__ == "__main__":
         sys_db.create_database(ARANGO_DB_NAME)
 
     db = client.db(name=ARANGO_DB_NAME, username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
+    if logflag:
+        logger.info(f"Connected to ArangoDB {db.version()}.")
 
     opea_microservices["opea_service@prepare_doc_arango"].start()

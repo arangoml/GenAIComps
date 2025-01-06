@@ -245,5 +245,7 @@ if __name__ == "__main__":
         sys_db.create_database(ARANGO_DB_NAME)
 
     db = client.db(name=ARANGO_DB_NAME, username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
+    if logflag:
+        logger.info(f"Connected to ArangoDB {db.version()}.")
 
     opea_microservices["opea_service@retriever_arango"].start()
