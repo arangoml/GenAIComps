@@ -7,24 +7,24 @@ from typing import Any, Optional, Union
 
 from arango import ArangoClient
 from config import (
-    ARANGO_COLLECTION_NAME,
     ARANGO_DB_NAME,
     ARANGO_DISTANCE_STRATEGY,
     ARANGO_EMBEDDING_DIMENSION,
     ARANGO_EMBEDDING_FIELD,
+    ARANGO_GRAPH_NAME,
     ARANGO_NUM_CENTROIDS,
     ARANGO_PASSWORD,
     ARANGO_TEXT_FIELD,
-    ARANGO_TRAVERSAL_GRAPH_NAME,
+    ARANGO_TRAVERSAL_ENABLED,
     ARANGO_TRAVERSAL_MAX_DEPTH,
     ARANGO_URL,
     ARANGO_USE_APPROX_SEARCH,
     ARANGO_USERNAME,
-    TEI_EMBEDDING_ENDPOINT,
-    TEI_EMBED_MODEL,
     HUGGINGFACEHUB_API_TOKEN,
     OPENAI_API_KEY,
     OPENAI_EMBED_MODEL,
+    TEI_EMBED_MODEL,
+    TEI_EMBEDDING_ENDPOINT,
 )
 from langchain_community.embeddings import HuggingFaceBgeEmbeddings, HuggingFaceHubEmbeddings
 from langchain_community.vectorstores.arangodb_vector import ArangoVector
@@ -48,13 +48,12 @@ from comps.cores.proto.api_protocol import (
     RetrievalResponseData,
 )
 
+# TODO: Revisit these classes. How would they be presented in ChatQnA?
+# class ArangoTextDoc(TextDoc):
+#     neighborhood: Optional[list[dict[str, Any]]] = None
 
-class ArangoTextDoc(TextDoc):
-    neighborhood: Optional[list[dict[str, Any]]] = None
-
-
-class ArangoRetrievalResponseData(RetrievalResponseData):
-    neighborhood: Optional[list[dict[str, Any]]] = None
+# class ArangoRetrievalResponseData(RetrievalResponseData):
+#     neighborhood: Optional[list[dict[str, Any]]] = None
 
 
 logger = CustomLogger("retriever_arango")
@@ -70,20 +69,6 @@ def fetch_neighborhoods(
     max_depth: int,
 ) -> None:
     """Fetch neighborhoods of source documents. Updates the neighborhoods dictionary in-place."""
-    if not vector_db.db.has_graph(graph_name):
-        logger.error("Graph not found in database.")
-        return
-
-    graph = vector_db.db.graph(graph_name)
-
-    if not graph.has_edge_collection(f"{graph_name}_HAS_SOURCE"):
-        logger.error(f"Edge collection '{graph_name}_HAS_SOURCE' not found in graph.")
-        return
-
-    if not graph.has_edge_collection(f"{graph_name}_LINKS_TO"):
-        logger.error(f"Edge collection '{graph_name}_LINKS_TO' not found in graph.")
-        return
-
     if max_depth < 1:
         max_depth = 1
 
@@ -111,6 +96,9 @@ def fetch_neighborhoods(
     for doc in cursor:
         neighborhoods.update(doc)
 
+    if logflag:
+        logger.info(f"Fetched neighborhoods for {len(neighborhoods)} documents.")
+
 
 @register_microservice(
     name="opea_service@retriever_arango",
@@ -131,11 +119,41 @@ async def retrieve(
     query = input.text if isinstance(input, EmbedDoc) else input.input
     embedding = input.embedding if isinstance(input.embedding, list) else None
 
+    ########################
+    # Fetch the Graph Name #
+    ########################
+
+    # This is a workaround as the ChatQnA UI is limited to
+    # a single input field, so we need to parse the graph name from the query (for now).
+
+    graph_name = None
+    query_split = query.split("|")
+
+    if len(query) == 2:
+        # e.g "Who is connected to John Smith? | PersonGraph"
+        query = query_split[0].strip()
+        graph_name = query_split[1].strip()
+
+    if not graph_name:
+        graph_name = ARANGO_GRAPH_NAME
+
+    source_collection_name = f"{graph_name}_SOURCE"
+
+    if not db.has_graph(graph_name):
+        raise ValueError(f"Graph '{graph_name}' does not exist in ArangoDB.")
+
+    if not db.has_collection(source_collection_name):
+        raise ValueError(f"Collection '{source_collection_name}' does not exist in ArangoDB.")
+
+    ######################
+    # Compute Similarity #
+    ######################
+
     vector_db = ArangoVector(
         embedding=embeddings,
         embedding_dimension=ARANGO_EMBEDDING_DIMENSION,
         database=db,
-        collection_name=ARANGO_COLLECTION_NAME,
+        collection_name=source_collection_name,
         embedding_field=ARANGO_EMBEDDING_FIELD,
         text_field=ARANGO_TEXT_FIELD,
         distance_strategy=ARANGO_DISTANCE_STRATEGY,
@@ -169,41 +187,44 @@ async def retrieve(
             use_approx=ARANGO_USE_APPROX_SEARCH,
         )
 
+    ########################################
+    # Traverse Source Documents (optional) #
+    ########################################
+
     neighborhoods = {}
-    if ARANGO_TRAVERSAL_GRAPH_NAME:
+    if ARANGO_TRAVERSAL_ENABLED:
         fetch_neighborhoods(
             vector_db,
             neighborhoods,
             [r.id for r in search_res],
-            ARANGO_TRAVERSAL_GRAPH_NAME,
-            ARANGO_COLLECTION_NAME,
+            graph_name,
             ARANGO_TRAVERSAL_MAX_DEPTH,
         )
 
-    # return different response format
-    retrieved_docs: Union[list[ArangoTextDoc], list[ArangoRetrievalResponseData]] = []
-    if isinstance(input, EmbedDoc):
-        for r in search_res:
-            retrieved_docs.append(
-                ArangoTextDoc(
-                    text=r.page_content,
-                    id=r.id,
-                    neighborhood=neighborhoods.get(r.id),
-                )
-            )
+    ####################
+    # Process Response #
+    ####################
 
+    search_res_tuples = []
+    for r in search_res:
+        page_content = r.page_content
+        neighborhood = neighborhoods.get(r.id)
+
+        text = page_content
+        if neighborhood:
+            text += f"\n--------\nDocument Neighborhood:\n{neighborhood}"
+
+        search_res_tuples.append((r.id, text, r.metadata))
+
+    retrieved_docs: Union[list[TextDoc], list[RetrievalResponseData]] = []
+    if isinstance(input, EmbedDoc):
+        retrieved_docs = [TextDoc(id=id, text=text) for id, text, _ in search_res_tuples]
         result = SearchedDoc(retrieved_docs=retrieved_docs, initial_query=input.text)
 
     else:
-        for r in search_res:
-            retrieved_docs.append(
-                ArangoRetrievalResponseData(
-                    text=r.page_content,
-                    id=r.id,
-                    metadata=r.metadata,
-                    neighborhood=neighborhoods.get(r.id),
-                )
-            )
+        retrieved_docs = [
+            RetrievalResponseData(id=id, text=text, metadata=metadata) for id, text, metadata in search_res_tuples
+        ]
 
         if isinstance(input, RetrievalRequest):
             result = RetrievalResponse(retrieved_docs=retrieved_docs)
@@ -233,7 +254,9 @@ if __name__ == "__main__":
         embeddings = OpenAIEmbeddings(model=OPENAI_EMBED_MODEL, dimensions=ARANGO_EMBEDDING_DIMENSION)
     elif TEI_EMBEDDING_ENDPOINT and HUGGINGFACEHUB_API_TOKEN:
         # create embeddings using TEI endpoint service
-        embeddings = HuggingFaceHubEmbeddings(model=TEI_EMBEDDING_ENDPOINT, huggingfacehub_api_token=HUGGINGFACEHUB_API_TOKEN)
+        embeddings = HuggingFaceHubEmbeddings(
+            model=TEI_EMBEDDING_ENDPOINT, huggingfacehub_api_token=HUGGINGFACEHUB_API_TOKEN
+        )
     else:
         # create embeddings using local embedding model
         embeddings = HuggingFaceBgeEmbeddings(model_name=TEI_EMBED_MODEL)

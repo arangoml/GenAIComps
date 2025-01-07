@@ -28,7 +28,6 @@ export ARANGO_URL=${your_arango_url}
 export ARANGO_USERNAME=${your_arango_username}
 export ARANGO_PASSWORD=${your_arango_password}
 export ARANGO_DB_NAME=${your_db_name}
-export ARANGO_COLLECTION_NAME=${your_collection_name}
 export ARANGO_EMBEDDING_DIMENSION=${your_embedding_dimension}
 export PYTHONPATH=${path_to_comps}
 ```
@@ -121,7 +120,7 @@ ArangoDB Connection configuration
 - `ARANGO_DB_NAME`: The name of the database to use for the ArangoDB service.
 
 ArangoDB Collection configuration
-- `ARANGO_COLLECTION_NAME`: The name of the collection containing the documents.
+- `ARANGO_GRAPH_NAME`: The name of the graph that contains the document collection. It is always assumed that the graph contains a document collection, which is named as `"{ARANGO_GRAPH_NAME}_SOURCE"`. This collection contains the documents to be retrieved, which have been inserted by the Arango DataPrep service. Defaults to `GRAPH`. Additionally, it is possible to specify the Graph Name via the `text` parameter of the `/v1/retrieval` endpoint, using the `text: "query | graph_name"` syntax. For example, `text: "What is the revenue of Nike in 2023? | MySportsGraph"`. In this case, the graph name used will be `MySportsGraph`, which means the document collection will be `MySportsGraph_SOURCE`. This is useful if you have multiple graphs in the database.
 - `ARANGO_DISTANCE_STRATEGY`: The distance strategy to use for the embeddings. Options are `COSINE` and `L2` (euclidean distance).
 - `ARANGO_USE_APPROX_SEARCH`: Whether to use approximate neighbor search. If False, exact search will be used (slower, but more accurate). If True, approximate search will be used (faster, but less accurate). Defaults to `True`.
 - `ARANGO_TEXT_FIELD`:  The document field name storing the text.
@@ -130,7 +129,7 @@ ArangoDB Collection configuration
 - `ARANGO_NUM_CENTROIDS`: The number of centroids to use for the approximate search. Defaults to `1`, which is essentially exhaustive search.
 
 ArangoDB Traversal configuration
-- `ARANGO_TRAVERSAL_GRAPH_NAME`: If specified, the retriever will traverse the graph to retrieve the neighborhood of the retrieved documents.
+- `ARANGO_TRAVERSAL_ENABLED`: If set to True, the retriever will traverse the graph to retrieve the neighborhood of the retrieved documents, using the specified `ARANGO_GRAPH_NAME` as a reference. Defaults to `False`.
 - `ARANGO_TRAVERSAL_MAX_DEPTH`: The maximum depth to traverse the graph. Defaults to `1`.
 
 Embedding Configuration
