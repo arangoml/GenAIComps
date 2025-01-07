@@ -10,9 +10,9 @@ ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "test")
 ARANGO_DB_NAME = os.getenv("ARANGO_DB_NAME", "_system")
 
 # ArangoDB Graph Insertion configuration
-USE_ONE_ENTITY_COLLECTION = os.getenv("USE_ONE_ENTITY_COLLECTION", True)
 INSERT_ASYNC = os.getenv("INSERT_ASYNC", False)
 ARANGO_BATCH_SIZE = os.getenv("ARANGO_BATCH_SIZE", 500)
+ARANGO_GRAPH_NAME = os.getenv("ARANGO_GRAPH_NAME", "GRAPH")
 
 # Text Generation Inference configuration
 TGI_LLM_ENDPOINT = os.getenv("TGI_LLM_ENDPOINT", "http://localhost:8080")
