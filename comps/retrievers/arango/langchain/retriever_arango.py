@@ -145,6 +145,15 @@ async def retrieve(
     if not db.has_collection(source_collection_name):
         raise ValueError(f"Collection '{source_collection_name}' does not exist in ArangoDB.")
 
+    collection_count = db.collection(source_collection_name).count()
+    if collection_count == 0:
+        logger.error(f"Collection '{source_collection_name}' is empty.")
+        return
+
+    if collection_count < ARANGO_NUM_CENTROIDS:
+        logger.error(f"Collection '{source_collection_name}' has fewer documents ({collection_count}) than the number of centroids ({ARANGO_NUM_CENTROIDS}).")
+        return
+
     ######################
     # Compute Similarity #
     ######################
