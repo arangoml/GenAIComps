@@ -34,6 +34,8 @@ from config import (
     TGI_LLM_TIMEOUT,
     TGI_LLM_TOP_K,
     TGI_LLM_TOP_P,
+    OPENAI_CHAT_ENABLED,
+    OPENAI_EMBED_ENABLED,
 )
 from fastapi import File, Form, HTTPException, UploadFile
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -145,15 +147,12 @@ def ingest_data_to_arango(doc_path: DocPath) -> str:
         file_name = os.path.basename(path).split(".")[0]
         graph_name = "".join(c for c in file_name if c.isalnum() or c in "_-:.@()+,=;$!*'%")
 
-    generate_chunk_embeddings = embeddings is not None
-
     for text in chunks:
         document = Document(page_content=text)
         graph_doc = llm_transformer.process_response(document)
 
-        if generate_chunk_embeddings:
-            source = graph_doc.source
-            source.metadata["embedding"] = embeddings.embed_documents([source.page_content])[0]
+        source = graph_doc.source
+        source.metadata["embedding"] = embeddings.embed_documents([source.page_content])[0]
 
         graph.add_graph_documents(
             graph_documents=[graph_doc],
@@ -267,7 +266,7 @@ if __name__ == "__main__":
     # Text Generation Inference #
     #############################
 
-    if OPENAI_API_KEY:
+    if OPENAI_API_KEY and OPENAI_CHAT_ENABLED:
         if logflag:
             logger.info("OpenAI API Key is set. Verifying its validity...")
         openai.api_key = OPENAI_API_KEY
@@ -294,7 +293,7 @@ if __name__ == "__main__":
             timeout=TGI_LLM_TIMEOUT,
         )
     else:
-        raise ValueError("No text generation inference endpoint is set.")
+        raise ValueError("No text generation environment variables are set, cannot generate graphs.")
 
     try:
         llm_transformer = LLMGraphTransformer(
@@ -320,7 +319,7 @@ if __name__ == "__main__":
     # Text Embeddings Inference (optional) #
     ########################################
 
-    if OPENAI_API_KEY:
+    if OPENAI_API_KEY and OPENAI_EMBED_ENABLED:
         # Use OpenAI embeddings
         embeddings = OpenAIEmbeddings(
             model=OPENAI_EMBED_MODEL,
@@ -337,9 +336,7 @@ if __name__ == "__main__":
         # Use local embedding model
         embeddings = HuggingFaceBgeEmbeddings(model_name=TEI_EMBED_MODEL)
     else:
-        if logflag:
-            logger.warning("No embeddings environment variables are set, cannot generate embeddings.")
-        embeddings = None
+        raise ValueError("No embeddings environment variables are set, cannot generate embeddings.")
 
     ############
     # ArangoDB #

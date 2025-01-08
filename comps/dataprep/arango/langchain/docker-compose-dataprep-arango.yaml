@@ -10,6 +10,22 @@ services:
       - "8529:8529"
     environment:
       ARANGO_ROOT_PASSWORD: ${ARANGO_PASSWORD}
+  tei-embedding-service:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.5
+    container_name: tei-embedding-server
+    ports:
+      - "6006:80"
+    volumes:
+      - "./data:/data"
+    shm_size: 1g
+    environment:
+      no_proxy: ${no_proxy}
+      NO_PROXY: ${no_proxy}
+      http_proxy: ${http_proxy}
+      https_proxy: ${https_proxy}
+      HUGGING_FACE_HUB_TOKEN: ${HUGGINGFACEHUB_API_TOKEN}
+    ipc: host
+    command: --model-id ${EMBEDDING_MODEL_ID} --auto-truncate
   tgi_gaudi_service:
     image: ghcr.io/huggingface/tgi-gaudi:2.0.5
     container_name: tgi-service
@@ -30,6 +46,7 @@ services:
     depends_on:
       - arango-vector-db
       - tgi_gaudi_service
+      - tei-embedding-service
     ports:
       - "6007:6007"
     ipc: host

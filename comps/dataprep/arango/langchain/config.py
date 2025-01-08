@@ -29,10 +29,12 @@ TEI_EMBED_MODEL = os.getenv("TEI_EMBED_MODEL", "BAAI/bge-base-en-v1.5")
 
 # OpenAI configuration (alternative to TGI & TEI)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-OPENAI_EMBED_MODEL = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small")
-OPENAI_EMBED_DIMENSIONS = os.getenv("OPENAI_EMBED_DIMENSIONS", 512)
 OPENAI_CHAT_MODEL = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o")
 OPENAI_CHAT_TEMPERATURE = os.getenv("OPENAI_CHAT_TEMPERATURE", 0)
+OPENAI_EMBED_MODEL = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small")
+OPENAI_EMBED_DIMENSIONS = os.getenv("OPENAI_EMBED_DIMENSIONS", 512)
+OPENAI_CHAT_ENABLED = os.getenv("OPENAI_TEI_ENABLED", True)
+OPENAI_EMBED_ENABLED = os.getenv("OPENAI_TGI_ENABLED", True)
 
 # LLMGraphTransformer configuration
 SYSTEM_PROMPT_PATH = os.getenv("SYSTEM_PROMPT_PATH")
