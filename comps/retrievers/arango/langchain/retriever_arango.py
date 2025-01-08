@@ -114,6 +114,17 @@ async def retrieve(
     if logflag:
         logger.info(input)
 
+    if isinstance(input, EmbedDoc):
+        empty_result = SearchedDoc(retrieved_docs=[], initial_query=input.text)
+    elif isinstance(input, RetrievalRequest):
+        empty_result = RetrievalResponse(retrieved_docs=[])
+    elif isinstance(input, ChatCompletionRequest):
+        input.retrieved_docs = []
+        input.documents = []
+        empty_result = input
+    else:
+        raise ValueError("Invalid input type: ", type(input))
+
     start = time.time()
 
     query = input.text if isinstance(input, EmbedDoc) else input.input
@@ -140,19 +151,30 @@ async def retrieve(
     source_collection_name = f"{graph_name}_SOURCE"
 
     if not db.has_graph(graph_name):
-        raise ValueError(f"Graph '{graph_name}' does not exist in ArangoDB.")
+        if logflag:
+            logger.error(f"Graph '{graph_name}' does not exist in ArangoDB.")
+
+        return empty_result
 
     if not db.has_collection(source_collection_name):
-        raise ValueError(f"Collection '{source_collection_name}' does not exist in ArangoDB.")
+        if logflag:
+            logger.error(f"Collection '{source_collection_name}' does not exist in ArangoDB.")
+
+        return empty_result
 
     collection_count = db.collection(source_collection_name).count()
     if collection_count == 0:
-        logger.error(f"Collection '{source_collection_name}' is empty.")
-        return
+        if logflag:
+            logger.error(f"Collection '{source_collection_name}' is empty.")
+
+        return empty_result
 
     if collection_count < ARANGO_NUM_CENTROIDS:
-        logger.error(f"Collection '{source_collection_name}' has fewer documents ({collection_count}) than the number of centroids ({ARANGO_NUM_CENTROIDS}).")
-        return
+        if logflag:
+            m = f"Collection '{source_collection_name}' has fewer documents ({collection_count}) than the number of centroids ({ARANGO_NUM_CENTROIDS})."
+            logger.error(m)
+
+        return empty_result
 
     ######################
     # Compute Similarity #
@@ -169,32 +191,44 @@ async def retrieve(
         num_centroids=ARANGO_NUM_CENTROIDS,
     )
 
-    if input.search_type == "similarity_score_threshold":
-        docs_and_similarities = await vector_db.asimilarity_search_with_relevance_scores(
-            query=query,
-            embedding=embedding,
-            k=input.k,
-            score_threshold=input.score_threshold,
-            use_approx=ARANGO_USE_APPROX_SEARCH,
-        )
-        search_res = [doc for doc, _ in docs_and_similarities]
-    elif input.search_type == "mmr":
-        search_res = await vector_db.amax_marginal_relevance_search(
-            query=query,
-            embedding=embedding,
-            k=input.k,
-            fetch_k=input.fetch_k,
-            lambda_mult=input.lambda_mult,
-            use_approx=ARANGO_USE_APPROX_SEARCH,
-        )
-    else:
-        # Default to basic similarity search
-        search_res = await vector_db.asimilarity_search(
-            query=query,
-            embedding=embedding,
-            k=input.k,
-            use_approx=ARANGO_USE_APPROX_SEARCH,
-        )
+    try:
+        if input.search_type == "similarity_score_threshold":
+            docs_and_similarities = await vector_db.asimilarity_search_with_relevance_scores(
+                query=query,
+                embedding=embedding,
+                k=input.k,
+                score_threshold=input.score_threshold,
+                use_approx=ARANGO_USE_APPROX_SEARCH,
+            )
+            search_res = [doc for doc, _ in docs_and_similarities]
+        elif input.search_type == "mmr":
+            search_res = await vector_db.amax_marginal_relevance_search(
+                query=query,
+                embedding=embedding,
+                k=input.k,
+                fetch_k=input.fetch_k,
+                lambda_mult=input.lambda_mult,
+                use_approx=ARANGO_USE_APPROX_SEARCH,
+            )
+        else:
+            # Default to basic similarity search
+            search_res = await vector_db.asimilarity_search(
+                query=query,
+                embedding=embedding,
+                k=input.k,
+                use_approx=ARANGO_USE_APPROX_SEARCH,
+            )
+    except Exception as e:
+        if logflag:
+            logger.error(f"Error during similarity search: {e}")
+
+        return empty_result
+
+    if not search_res:
+        if logflag:
+            logger.info("No documents found.")
+
+        return empty_result
 
     ########################################
     # Traverse Source Documents (optional) #
