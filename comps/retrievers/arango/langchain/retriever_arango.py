@@ -57,7 +57,7 @@ from comps.cores.proto.api_protocol import (
 
 
 logger = CustomLogger("retriever_arango")
-logflag = os.getenv("LOGFLAG", False)
+logflag = os.getenv("LOGFLAG", True)
 
 
 def fetch_neighborhoods(
