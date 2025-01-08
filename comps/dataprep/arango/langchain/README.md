@@ -116,9 +116,10 @@ ArangoDB Connection configuration
 - `ARANGO_DB_NAME`: The name of the database to use for the ArangoDB service.
 
 ArangoDB Graph Insertion configuration
-- `USE_ONE_ENTITY_COLLECTION`: If set to True, the microservice will use a single entity collection for all nodes. If set to False, the microservice will use a separate collection by node type. Defaults to `True`.
 - `INSERT_ASYNC`: If set to True, the microservice will insert the data into ArangoDB asynchronously. Defaults to `False`.
 - `ARANGO_BATCH_SIZE`: The batch size for the microservice to insert the data. Defaults to `500`.
+- `ARANGO_GRAPH_NAME`: The name of the graph to use/create in ArangoDB Defaults to `GRAPH`. 
+- `ARANGO_USE_GRAPH_NAME`: If set to True, the microservice will use the graph name specified in the environment variable `ARANGO_GRAPH_NAME`. If set to False, the file name will be used as the graph name. Defaults to `True`.
 
 Text Generation Inference Configuration
 - `TGI_LLM_ENDPOINT`: The endpoint for the TGI service.

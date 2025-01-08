@@ -12,6 +12,7 @@ from config import (
     ALLOWED_RELATIONSHIPS,
     ARANGO_BATCH_SIZE,
     ARANGO_DB_NAME,
+    ARANGO_GRAPH_NAME,
     ARANGO_PASSWORD,
     ARANGO_URL,
     ARANGO_USERNAME,
@@ -33,7 +34,9 @@ from config import (
     TGI_LLM_TIMEOUT,
     TGI_LLM_TOP_K,
     TGI_LLM_TOP_P,
-    USE_ONE_ENTITY_COLLECTION,
+    OPENAI_CHAT_ENABLED,
+    OPENAI_EMBED_ENABLED,
+    ARANGO_USE_GRAPH_NAME,
 )
 from fastapi import File, Form, HTTPException, UploadFile
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -86,7 +89,7 @@ if SYSTEM_PROMPT_PATH is not None:
         logger.error(f"Could not set custom Prompt: {e}")
 
 
-def ingest_data_to_arango(doc_path: DocPath, graph_name: str, generate_chunk_embeddings: bool) -> bool:
+def ingest_data_to_arango(doc_path: DocPath) -> str:
     """Ingest document to ArangoDB."""
     path = doc_path.path
 
@@ -128,7 +131,7 @@ def ingest_data_to_arango(doc_path: DocPath, graph_name: str, generate_chunk_emb
             chunks = chunks + table_chunks
 
     if logflag:
-        logger.info(f"Done preprocessing. Created {len(chunks)} chunks of the original file.")
+        logger.info(f"Created {len(chunks)} chunks of the original file.")
 
     ################################
     # Graph generation & insertion #
@@ -140,29 +143,40 @@ def ingest_data_to_arango(doc_path: DocPath, graph_name: str, generate_chunk_emb
         generate_schema_on_init=False,
     )
 
-    for text in chunks:
+    if ARANGO_USE_GRAPH_NAME:
+        graph_name = ARANGO_GRAPH_NAME
+    else:
+        file_name = os.path.basename(path).split(".")[0]
+        graph_name = "".join(c for c in file_name if c.isalnum() or c in "_-:.@()+,=;$!*'%")
+
+    if logflag:
+        logger.info(f"Creating graph {graph_name}.")
+
+    for i, text in enumerate(chunks):
         document = Document(page_content=text)
         graph_doc = llm_transformer.process_response(document)
 
-        if generate_chunk_embeddings:
-            source = graph_doc.source
-            source.metadata["embedding"] = embeddings.embed_documents([source.page_content])[0]
+        source = graph_doc.source
+        source.metadata["embedding"] = embeddings.embed_documents([source.page_content])[0]
 
         graph.add_graph_documents(
             graph_documents=[graph_doc],
             include_source=True,
             graph_name=graph_name,
-            update_graph_definition_if_exists=not USE_ONE_ENTITY_COLLECTION,
+            update_graph_definition_if_exists=False,
             batch_size=ARANGO_BATCH_SIZE,
-            use_one_entity_collection=USE_ONE_ENTITY_COLLECTION,
+            use_one_entity_collection=True,
             insert_async=INSERT_ASYNC,
             source_metadata_fields_to_extract_to_top_level={"embedding"},
         )
 
+        if logflag:
+            logger.info(f"Chunk {i} processed into graph.")
+
     if logflag:
         logger.info("The graph is built.")
 
-    return True
+    return graph_name
 
 
 @register_microservice(
@@ -180,12 +194,15 @@ async def ingest_documents(
     chunk_overlap: int = Form(100),
     process_table: bool = Form(False),
     table_strategy: str = Form("fast"),
-    graph_name: str = Form("Graph"),
-    create_embeddings: bool = Form(True),
 ):
     if logflag:
         logger.info(f"files:{files}")
         logger.info(f"link_list:{link_list}")
+
+    if not files and not link_list:
+        raise HTTPException(status_code=400, detail="Must provide either a file or a string list.")
+
+    graph_names_created = set()
 
     if files:
         if not isinstance(files, list):
@@ -195,24 +212,24 @@ async def ingest_documents(
             encode_file = encode_filename(file.filename)
             save_path = upload_folder + encode_file
             await save_content_to_local_disk(save_path, file)
-            ingest_data_to_arango(
-                DocPath(
-                    path=save_path,
-                    chunk_size=chunk_size,
-                    chunk_overlap=chunk_overlap,
-                    process_table=process_table,
-                    table_strategy=table_strategy,
-                ),
-                graph_name=graph_name,
-                generate_chunk_embeddings=create_embeddings and embeddings is not None,
-            )
-            uploaded_files.append(save_path)
+            try:
+                graph_name = ingest_data_to_arango(
+                    DocPath(
+                        path=save_path,
+                        chunk_size=chunk_size,
+                        chunk_overlap=chunk_overlap,
+                        process_table=process_table,
+                        table_strategy=table_strategy,
+                    ),
+                )
+
+                uploaded_files.append(save_path)
+                graph_names_created.add(graph_name)
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Failed to ingest {save_path} into ArangoDB: {e}")
+
             if logflag:
                 logger.info(f"Successfully saved file {save_path}")
-        result = {"status": 200, "message": "Data preparation succeeded"}
-        if logflag:
-            logger.info(result)
-        return result
 
     if link_list:
         link_list = json.loads(link_list)  # Parse JSON string to list
@@ -222,9 +239,9 @@ async def ingest_documents(
             encoded_link = encode_filename(link)
             save_path = upload_folder + encoded_link + ".txt"
             content = parse_html([link])[0][0]
+            await save_content_to_local_disk(save_path, content)
             try:
-                await save_content_to_local_disk(save_path, content)
-                ingest_data_to_arango(
+                graph_name = ingest_data_to_arango(
                     DocPath(
                         path=save_path,
                         chunk_size=chunk_size,
@@ -232,21 +249,26 @@ async def ingest_documents(
                         process_table=process_table,
                         table_strategy=table_strategy,
                     ),
-                    graph_name=graph_name,
-                    generate_chunk_embeddings=create_embeddings and embeddings is not None,
                 )
-            except json.JSONDecodeError:
-                raise HTTPException(status_code=500, detail="Fail to ingest data into qdrant.")
+                graph_names_created.add(graph_name)
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Failed to ingest {save_path} into ArangoDB: {e}")
 
             if logflag:
                 logger.info(f"Successfully saved link {link}")
 
-        result = {"status": 200, "message": "Data preparation succeeded"}
-        if logflag:
-            logger.info(result)
-        return result
+    graph_names_created = list(graph_names_created)
 
-    raise HTTPException(status_code=400, detail="Must provide either a file or a string list.")
+    result = {
+        "status": 200,
+        "message": f"Data preparation succeeded: {graph_names_created}",
+        "graph_names": graph_names_created,
+    }
+
+    if logflag:
+        logger.info(result)
+
+    return result
 
 
 if __name__ == "__main__":
@@ -255,7 +277,7 @@ if __name__ == "__main__":
     # Text Generation Inference #
     #############################
 
-    if OPENAI_API_KEY:
+    if OPENAI_API_KEY and OPENAI_CHAT_ENABLED:
         if logflag:
             logger.info("OpenAI API Key is set. Verifying its validity...")
         openai.api_key = OPENAI_API_KEY
@@ -282,7 +304,7 @@ if __name__ == "__main__":
             timeout=TGI_LLM_TIMEOUT,
         )
     else:
-        raise ValueError("No text generation inference endpoint is set.")
+        raise ValueError("No text generation environment variables are set, cannot generate graphs.")
 
     try:
         llm_transformer = LLMGraphTransformer(
@@ -308,7 +330,7 @@ if __name__ == "__main__":
     # Text Embeddings Inference (optional) #
     ########################################
 
-    if OPENAI_API_KEY:
+    if OPENAI_API_KEY and OPENAI_EMBED_ENABLED:
         # Use OpenAI embeddings
         embeddings = OpenAIEmbeddings(
             model=OPENAI_EMBED_MODEL,
@@ -325,9 +347,7 @@ if __name__ == "__main__":
         # Use local embedding model
         embeddings = HuggingFaceBgeEmbeddings(model_name=TEI_EMBED_MODEL)
     else:
-        if logflag:
-            logger.warning("No embeddings environment variables are set, cannot generate embeddings.")
-        embeddings = None
+        raise ValueError("No embeddings environment variables are set, cannot generate embeddings.")
 
     ############
     # ArangoDB #
