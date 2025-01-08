@@ -10,9 +10,10 @@ ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "test")
 ARANGO_DB_NAME = os.getenv("ARANGO_DB_NAME", "_system")
 
 # ArangoDB Graph Insertion configuration
-USE_ONE_ENTITY_COLLECTION = os.getenv("USE_ONE_ENTITY_COLLECTION", True)
 INSERT_ASYNC = os.getenv("INSERT_ASYNC", False)
 ARANGO_BATCH_SIZE = os.getenv("ARANGO_BATCH_SIZE", 500)
+ARANGO_GRAPH_NAME = os.getenv("ARANGO_GRAPH_NAME", "GRAPH")
+ARANGO_USE_GRAPH_NAME = os.getenv("ARANGO_USE_GRAPH_NAME", True)
 
 # Text Generation Inference configuration
 TGI_LLM_ENDPOINT = os.getenv("TGI_LLM_ENDPOINT", "http://localhost:8080")
@@ -29,10 +30,12 @@ TEI_EMBED_MODEL = os.getenv("TEI_EMBED_MODEL", "BAAI/bge-base-en-v1.5")
 
 # OpenAI configuration (alternative to TGI & TEI)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-OPENAI_EMBED_MODEL = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small")
-OPENAI_EMBED_DIMENSIONS = os.getenv("OPENAI_EMBED_DIMENSIONS", 512)
 OPENAI_CHAT_MODEL = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o")
 OPENAI_CHAT_TEMPERATURE = os.getenv("OPENAI_CHAT_TEMPERATURE", 0)
+OPENAI_EMBED_MODEL = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small")
+OPENAI_EMBED_DIMENSIONS = os.getenv("OPENAI_EMBED_DIMENSIONS", 512)
+OPENAI_CHAT_ENABLED = os.getenv("OPENAI_TEI_ENABLED", True)
+OPENAI_EMBED_ENABLED = os.getenv("OPENAI_TGI_ENABLED", True)
 
 # LLMGraphTransformer configuration
 SYSTEM_PROMPT_PATH = os.getenv("SYSTEM_PROMPT_PATH")
