@@ -130,7 +130,7 @@ def ingest_data_to_arango(doc_path: DocPath) -> str:
             chunks = chunks + table_chunks
 
     if logflag:
-        logger.info(f"Done preprocessing. Created {len(chunks)} chunks of the original file.")
+        logger.info(f"Created {len(chunks)} chunks of the original file.")
 
     ################################
     # Graph generation & insertion #
@@ -147,7 +147,10 @@ def ingest_data_to_arango(doc_path: DocPath) -> str:
         file_name = os.path.basename(path).split(".")[0]
         graph_name = "".join(c for c in file_name if c.isalnum() or c in "_-:.@()+,=;$!*'%")
 
-    for text in chunks:
+    if logflag:
+        logger.info(f"Creating graph {graph_name}.")
+
+    for i, text in enumerate(chunks):
         document = Document(page_content=text)
         graph_doc = llm_transformer.process_response(document)
 
@@ -164,6 +167,9 @@ def ingest_data_to_arango(doc_path: DocPath) -> str:
             insert_async=INSERT_ASYNC,
             source_metadata_fields_to_extract_to_top_level={"embedding"},
         )
+
+        if logflag:
+            logger.info(f"Chunk {i} processed into graph.")
 
     if logflag:
         logger.info("The graph is built.")
