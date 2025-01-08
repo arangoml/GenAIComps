@@ -272,12 +272,10 @@ async def retrieve(
         if isinstance(input, RetrievalRequest):
             result = RetrievalResponse(retrieved_docs=retrieved_docs)
 
-        elif isinstance(input, ChatCompletionRequest):
+        else:
             input.retrieved_docs = retrieved_docs
             input.documents = [doc.text for doc in retrieved_docs]
             result = input
-        else:
-            raise ValueError("Invalid input type: ", type(input))
 
     statistics_dict["opea_service@retriever_arango"].append_latency(time.time() - start, None)
 
