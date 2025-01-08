@@ -191,6 +191,9 @@ async def ingest_documents(
         logger.info(f"files:{files}")
         logger.info(f"link_list:{link_list}")
 
+    if not files and not link_list:
+        raise HTTPException(status_code=400, detail="Must provide either a file or a string list.")
+
     graph_names_created = set()
 
     if files:
@@ -201,18 +204,21 @@ async def ingest_documents(
             encode_file = encode_filename(file.filename)
             save_path = upload_folder + encode_file
             await save_content_to_local_disk(save_path, file)
-            graph_name = ingest_data_to_arango(
-                DocPath(
-                    path=save_path,
-                    chunk_size=chunk_size,
-                    chunk_overlap=chunk_overlap,
-                    process_table=process_table,
-                    table_strategy=table_strategy,
-                ),
-            )
+            try:
+                graph_name = ingest_data_to_arango(
+                    DocPath(
+                        path=save_path,
+                        chunk_size=chunk_size,
+                        chunk_overlap=chunk_overlap,
+                        process_table=process_table,
+                        table_strategy=table_strategy,
+                    ),
+                )
 
-            uploaded_files.append(save_path)
-            graph_names_created.add(graph_name)
+                uploaded_files.append(save_path)
+                graph_names_created.add(graph_name)
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Failed to ingest {save_path} into ArangoDB: {e}")
 
             if logflag:
                 logger.info(f"Successfully saved file {save_path}")
@@ -225,8 +231,8 @@ async def ingest_documents(
             encoded_link = encode_filename(link)
             save_path = upload_folder + encoded_link + ".txt"
             content = parse_html([link])[0][0]
+            await save_content_to_local_disk(save_path, content)
             try:
-                await save_content_to_local_disk(save_path, content)
                 graph_name = ingest_data_to_arango(
                     DocPath(
                         path=save_path,
@@ -237,14 +243,11 @@ async def ingest_documents(
                     ),
                 )
                 graph_names_created.add(graph_name)
-            except json.JSONDecodeError:
-                raise HTTPException(status_code=500, detail="Fail to ingest data into qdrant.")
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Failed to ingest {save_path} into ArangoDB: {e}")
 
             if logflag:
                 logger.info(f"Successfully saved link {link}")
-
-    if len(graph_names_created) == 0:
-        raise HTTPException(status_code=400, detail="Must provide either a file or a string list.")
 
     graph_names_created = list(graph_names_created)
 
