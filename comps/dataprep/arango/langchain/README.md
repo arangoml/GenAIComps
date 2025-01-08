@@ -118,7 +118,8 @@ ArangoDB Connection configuration
 ArangoDB Graph Insertion configuration
 - `INSERT_ASYNC`: If set to True, the microservice will insert the data into ArangoDB asynchronously. Defaults to `False`.
 - `ARANGO_BATCH_SIZE`: The batch size for the microservice to insert the data. Defaults to `500`.
-- `ARANGO_GRAPH_NAME`: The name of the graph to use/create in ArangoDB. If this environment variable is not set, the microservice will use the file name as the graph name. Defaults to `GRAPH`. 
+- `ARANGO_GRAPH_NAME`: The name of the graph to use/create in ArangoDB Defaults to `GRAPH`. 
+- `ARANGO_USE_GRAPH_NAME`: If set to True, the microservice will use the graph name specified in the environment variable `ARANGO_GRAPH_NAME`. If set to False, the file name will be used as the graph name. Defaults to `True`.
 
 Text Generation Inference Configuration
 - `TGI_LLM_ENDPOINT`: The endpoint for the TGI service.

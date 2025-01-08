@@ -36,6 +36,7 @@ from config import (
     TGI_LLM_TOP_P,
     OPENAI_CHAT_ENABLED,
     OPENAI_EMBED_ENABLED,
+    ARANGO_USE_GRAPH_NAME,
 )
 from fastapi import File, Form, HTTPException, UploadFile
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -142,8 +143,9 @@ def ingest_data_to_arango(doc_path: DocPath) -> str:
         generate_schema_on_init=False,
     )
 
-    graph_name = ARANGO_GRAPH_NAME
-    if not graph_name:
+    if ARANGO_USE_GRAPH_NAME:
+        graph_name = ARANGO_GRAPH_NAME
+    else:
         file_name = os.path.basename(path).split(".")[0]
         graph_name = "".join(c for c in file_name if c.isalnum() or c in "_-:.@()+,=;$!*'%")
 
