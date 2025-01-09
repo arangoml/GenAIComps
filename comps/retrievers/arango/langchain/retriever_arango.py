@@ -9,7 +9,6 @@ from arango import ArangoClient
 from config import (
     ARANGO_DB_NAME,
     ARANGO_DISTANCE_STRATEGY,
-    ARANGO_EMBEDDING_DIMENSION,
     ARANGO_EMBEDDING_FIELD,
     ARANGO_GRAPH_NAME,
     ARANGO_NUM_CENTROIDS,
@@ -140,7 +139,7 @@ async def retrieve(
     graph_name = None
     query_split = query.split("|")
 
-    if len(query) == 2:
+    if len(query_split) == 2:
         # e.g "Who is connected to John Smith? | PersonGraph"
         query = query_split[0].strip()
         graph_name = query_split[1].strip()
@@ -162,7 +161,9 @@ async def retrieve(
 
         return empty_result
 
-    collection_count = db.collection(source_collection_name).count()
+    collection = db.collection(source_collection_name)
+
+    collection_count = collection.count()
     if collection_count == 0:
         if logflag:
             logger.error(f"Collection '{source_collection_name}' is empty.")
@@ -176,13 +177,45 @@ async def retrieve(
 
         return empty_result
 
+    ###########################
+    # Retrieve Embedding size #
+    ###########################
+    print(f"Getting collection {source_collection_name} for vector index...")
+    random_doc = collection.random()
+    if ARANGO_EMBEDDING_FIELD not in random_doc:
+        if logflag:
+            logger.error(f"Document in collection '{source_collection_name}' is missing vector_index field.")
+        print("No vector_index field in document!")
+        return empty_result
+
+    print(f"Getting dimension from vector_index field...")
+    dimension = len(random_doc[ARANGO_EMBEDDING_FIELD])
+    print(f"Dimension: {dimension}")
+
+    if not dimension:
+        if logflag:
+            logger.error(f"Could not determine embedding dimension from field '{ARANGO_EMBEDDING_FIELD}'.")
+        print("Dimension is 0!")
+        return empty_result
+
+    if OPENAI_API_KEY and OPENAI_EMBED_MODEL:
+        # Use OpenAI embeddings
+        embeddings = OpenAIEmbeddings(model=OPENAI_EMBED_MODEL, dimensions=dimension)
+    elif TEI_EMBEDDING_ENDPOINT and HUGGINGFACEHUB_API_TOKEN:
+        # create embeddings using TEI endpoint service
+        embeddings = HuggingFaceHubEmbeddings(
+            model=TEI_EMBEDDING_ENDPOINT, huggingfacehub_api_token=HUGGINGFACEHUB_API_TOKEN
+        )
+    else:
+        # create embeddings using local embedding model
+        embeddings = HuggingFaceBgeEmbeddings(model_name=TEI_EMBED_MODEL)
+
     ######################
     # Compute Similarity #
     ######################
-
     vector_db = ArangoVector(
         embedding=embeddings,
-        embedding_dimension=ARANGO_EMBEDDING_DIMENSION,
+        embedding_dimension=dimension,
         database=db,
         collection_name=source_collection_name,
         embedding_field=ARANGO_EMBEDDING_FIELD,
@@ -286,21 +319,6 @@ async def retrieve(
 
 
 if __name__ == "__main__":
-
-    if not ARANGO_EMBEDDING_DIMENSION:
-        raise ValueError("EMBED_DIMENSION must specified in advance.")
-
-    if OPENAI_API_KEY and OPENAI_EMBED_MODEL:
-        # Use OpenAI embeddings
-        embeddings = OpenAIEmbeddings(model=OPENAI_EMBED_MODEL, dimensions=ARANGO_EMBEDDING_DIMENSION)
-    elif TEI_EMBEDDING_ENDPOINT and HUGGINGFACEHUB_API_TOKEN:
-        # create embeddings using TEI endpoint service
-        embeddings = HuggingFaceHubEmbeddings(
-            model=TEI_EMBEDDING_ENDPOINT, huggingfacehub_api_token=HUGGINGFACEHUB_API_TOKEN
-        )
-    else:
-        # create embeddings using local embedding model
-        embeddings = HuggingFaceBgeEmbeddings(model_name=TEI_EMBED_MODEL)
 
     client = ArangoClient(hosts=ARANGO_URL)
     sys_db = client.db(name="_system", username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
