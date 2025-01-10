@@ -282,11 +282,12 @@ async def retrieve(
     neighborhoods = {}
     if ARANGO_TRAVERSAL_ENABLED:
         fetch_neighborhoods(
-            vector_db,
-            neighborhoods,
-            [r.id for r in search_res],
-            graph_name,
-            ARANGO_TRAVERSAL_MAX_DEPTH,
+            vector_db=vector_db,
+            keys=[r.id for r in search_res],
+            neighborhoods=neighborhoods,
+            graph_name=graph_name,
+            source_collection_name=source_collection_name,
+            max_depth=ARANGO_TRAVERSAL_MAX_DEPTH,
         )
 
     ####################
