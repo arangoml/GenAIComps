@@ -177,25 +177,33 @@ async def retrieve(
 
         return empty_result
 
-    ###########################
-    # Retrieve Embedding size #
-    ###########################
-    print(f"Getting collection {source_collection_name} for vector index...")
+    ################################
+    # Retrieve Embedding Dimension #
+    ################################
+
     random_doc = collection.random()
-    if ARANGO_EMBEDDING_FIELD not in random_doc:
+    random_doc_id = random_doc["_id"]
+
+    embedding = random_doc.get(ARANGO_EMBEDDING_FIELD)
+
+    if not embedding:
         if logflag:
-            logger.error(f"Document in collection '{source_collection_name}' is missing vector_index field.")
-        print("No vector_index field in document!")
+            logger.error(f"Document '{random_doc_id}' is missing field '{ARANGO_EMBEDDING_FIELD}'.")
+
         return empty_result
 
-    print(f"Getting dimension from vector_index field...")
-    dimension = len(random_doc[ARANGO_EMBEDDING_FIELD])
-    print(f"Dimension: {dimension}")
-
-    if not dimension:
+    if not isinstance(embedding, list):
         if logflag:
-            logger.error(f"Could not determine embedding dimension from field '{ARANGO_EMBEDDING_FIELD}'.")
-        print("Dimension is 0!")
+            logger.error(f"Document '{random_doc_id}' has a non-list embedding field, found {type(embedding)}.")
+
+        return empty_result
+
+    dimension = len(embedding)
+
+    if dimension == 0:
+        if logflag:
+            logger.error(f"Document '{random_doc_id}' has an empty embedding field.")
+
         return empty_result
 
     if OPENAI_API_KEY and OPENAI_EMBED_MODEL:
