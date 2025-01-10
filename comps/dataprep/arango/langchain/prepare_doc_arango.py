@@ -17,12 +17,12 @@ from config import (
     ARANGO_URL,
     ARANGO_USERNAME,
     HUGGINGFACEHUB_API_TOKEN,
-    INSERT_ASYNC,
+    ARANGO_INSERT_ASYNC,
     NODE_PROPERTIES,
     OPENAI_API_KEY,
     OPENAI_CHAT_MODEL,
     OPENAI_CHAT_TEMPERATURE,
-    OPENAI_EMBED_DIMENSIONS,
+    OPENAI_EMBED_DIMENSION,
     OPENAI_EMBED_MODEL,
     RELATIONSHIP_PROPERTIES,
     SYSTEM_PROMPT_PATH,
@@ -166,7 +166,7 @@ def ingest_data_to_arango(doc_path: DocPath) -> str:
             update_graph_definition_if_exists=False,
             batch_size=ARANGO_BATCH_SIZE,
             use_one_entity_collection=True,
-            insert_async=INSERT_ASYNC,
+            insert_async=ARANGO_INSERT_ASYNC,
             source_metadata_fields_to_extract_to_top_level={"embedding"},
         )
 
@@ -334,7 +334,7 @@ if __name__ == "__main__":
         # Use OpenAI embeddings
         embeddings = OpenAIEmbeddings(
             model=OPENAI_EMBED_MODEL,
-            dimensions=OPENAI_EMBED_DIMENSIONS,
+            dimensions=OPENAI_EMBED_DIMENSION,
         )
 
     elif TEI_EMBEDDING_ENDPOINT and HUGGINGFACEHUB_API_TOKEN:
