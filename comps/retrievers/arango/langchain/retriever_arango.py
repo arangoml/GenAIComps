@@ -221,6 +221,7 @@ async def retrieve(
     ######################
     # Compute Similarity #
     ######################
+
     vector_db = ArangoVector(
         embedding=embeddings,
         embedding_dimension=dimension,
