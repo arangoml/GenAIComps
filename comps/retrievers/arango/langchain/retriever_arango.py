@@ -79,11 +79,24 @@ def fetch_neighborhoods(
             LET entity_neighborhood = (
                 FOR v1, e1, p1 IN 1..1 INBOUND doc {graph_name}_HAS_SOURCE
                     FOR v2, e2, p2 IN 1..{max_depth} ANY v1 {graph_name}_LINKS_TO
-                        RETURN p2
+
+                        LET isForward = (e2._to == v2._id)
+                        LET A = CONCAT(p2.vertices[-2].name, " (", p2.vertices[-2].type, ")")
+                        LET B = CONCAT(v2.name, " (", v2.type, ")")
+
+                        LET source = isForward ? A : B
+                        LET destination = !isForward ? A : B
+
+                        COLLECT s = source, d = destination
+                        AGGREGATE relations = UNIQUE(e2.type)
+
+                        FOR r IN relations
+                            RETURN CONCAT(s , ' ', r, ' ', d)
             )
 
             RETURN {{[doc._key]: entity_neighborhood}}
     """
+    # FOR s2 IN 1..1 OUTBOUND v2 {graph_name}_HAS_SOURCE (after aggregate)
 
     bind_vars = {
         "@collection": source_collection_name,
