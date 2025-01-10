@@ -151,13 +151,16 @@ async def retrieve(
 
     if not db.has_graph(graph_name):
         if logflag:
-            logger.error(f"Graph '{graph_name}' does not exist in ArangoDB.")
+            graph_names = [g["name"] for g in db.graphs()]
+            logger.error(f"Graph '{graph_name}' does not exist in ArangoDB. Graphs: {graph_names}")
 
         return empty_result
 
-    if not db.has_collection(source_collection_name):
+    if not db.graph(graph_name).has_vertex_collection(source_collection_name):
         if logflag:
-            logger.error(f"Collection '{source_collection_name}' does not exist in ArangoDB.")
+            collection_names = db.graph(graph_name).vertex_collections()
+            m = f"Collection '{source_collection_name}' does not exist in graph '{graph_name}'. Collections: {collection_names}"
+            logger.error(m)
 
         return empty_result
 
