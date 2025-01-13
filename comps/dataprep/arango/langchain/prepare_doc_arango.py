@@ -37,6 +37,10 @@ from config import (
     OPENAI_CHAT_ENABLED,
     OPENAI_EMBED_ENABLED,
     ARANGO_USE_GRAPH_NAME,
+    PROCESS_TABLE,
+    TABLE_STRATEGY,
+    CHUNK_SIZE,
+    CHUNK_OVERLAP,
 )
 from fastapi import File, Form, HTTPException, UploadFile
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -190,10 +194,10 @@ def ingest_data_to_arango(doc_path: DocPath) -> str:
 async def ingest_documents(
     files: Optional[Union[UploadFile, List[UploadFile]]] = File(None),
     link_list: Optional[str] = Form(None),
-    chunk_size: int = Form(1500),
-    chunk_overlap: int = Form(100),
-    process_table: bool = Form(False),
-    table_strategy: str = Form("fast"),
+    chunk_size: int = Form(CHUNK_SIZE),
+    chunk_overlap: int = Form(CHUNK_OVERLAP), 
+    process_table: bool = Form(PROCESS_TABLE),
+    table_strategy: str = Form(TABLE_STRATEGY),
 ):
     if logflag:
         logger.info(f"files:{files}")

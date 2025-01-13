@@ -43,3 +43,9 @@ ALLOWED_NODES = os.getenv("ALLOWED_NODES", [])
 ALLOWED_RELATIONSHIPS = os.getenv("ALLOWED_RELATIONSHIPS", [])
 NODE_PROPERTIES = os.getenv("NODE_PROPERTIES", ["description"])
 RELATIONSHIP_PROPERTIES = os.getenv("RELATIONSHIP_PROPERTIES", ["description"])
+
+# Parsing configuration
+PROCESS_TABLE = os.getenv("PROCESS_TABLE", "false").lower() == "true"
+TABLE_STRATEGY = os.getenv("TABLE_STRATEGY", "fast")
+CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", 1500))
+CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", 100))
