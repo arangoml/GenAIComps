@@ -100,12 +100,12 @@ def fetch_neighborhoods(
             FILTER doc._key IN @keys
 
             LET source_neighborhood = (
-                FOR v1, e1, p1 IN 1..1 INBOUND doc {graph_name}_HAS_SOURCE
-                    FOR v2, e2, p2 IN 1..{max_depth} ANY v1 {graph_name}_LINKS_TO OPTIONS {{uniqueEdges: "path"}}
-                        FOR v3, e3, p3 IN 1..1 OUTBOUND v2 {graph_name}_HAS_SOURCE
+                FOR v1 IN 1..1 INBOUND doc {graph_name}_HAS_SOURCE
+                    FOR v2 IN 1..{max_depth} ANY v1 {graph_name}_LINKS_TO OPTIONS {{uniqueEdges: "path"}}
+                        FOR v3 IN 1..1 OUTBOUND v2 {graph_name}_HAS_SOURCE
                             FILTER v3._key != doc._key
-                            COLLECT text = v3.text
-                            RETURN text
+                            COLLECT id = v3._key, text = v3.text
+                            RETURN {{[id]: text}}
             )
 
             RETURN {{[doc._key]: source_neighborhood}}
@@ -327,8 +327,8 @@ async def retrieve(
 
         text = page_content
         if neighborhood:
-            text += "\n------\nRELATED INFORMATION:\n------\n"
-            text += neighborhood
+            text += "\n------\nRELATED CHUNKS:\n------\n"
+            text += f"{neighborhood}\n"
 
         if logflag:
             logger.info(f"Document: {r.id}, Text: {text}")
