@@ -71,32 +71,45 @@ def fetch_neighborhoods(
     if max_depth < 1:
         max_depth = 1
 
-    # TODO: Consider using general `GRAPH` syntax instead of specific edge collections...
+    # aql = f"""
+    #     FOR doc IN @@collection
+    #         FILTER doc._key IN @keys
+
+    #         LET entity_neighborhood = (
+    #             FOR v1, e1, p1 IN 1..1 INBOUND doc {graph_name}_HAS_SOURCE
+    #                 FOR v2, e2, p2 IN 1..{max_depth} ANY v1 {graph_name}_LINKS_TO
+    #                     LET isForward = (e2._to == v2._id)
+    #                     LET A = CONCAT(p2.vertices[-2].name, " (", p2.vertices[-2].type, ")")
+    #                     LET B = CONCAT(v2.name, " (", v2.type, ")")
+
+    #                     LET source = isForward ? A : B
+    #                     LET destination = !isForward ? A : B
+
+    #                     COLLECT s = source, d = destination
+    #                     AGGREGATE relations = UNIQUE(e2.type)
+
+    #                     FOR r IN relations
+    #                         RETURN CONCAT(s , ' ', r, ' ', d)
+    #         )
+
+    #         RETURN {{[doc._key]: entity_neighborhood}}
+    # """
+
     aql = f"""
         FOR doc IN @@collection
             FILTER doc._key IN @keys
 
-            LET entity_neighborhood = (
+            LET source_neighborhood = (
                 FOR v1, e1, p1 IN 1..1 INBOUND doc {graph_name}_HAS_SOURCE
-                    FOR v2, e2, p2 IN 1..{max_depth} ANY v1 {graph_name}_LINKS_TO
-
-                        LET isForward = (e2._to == v2._id)
-                        LET A = CONCAT(p2.vertices[-2].name, " (", p2.vertices[-2].type, ")")
-                        LET B = CONCAT(v2.name, " (", v2.type, ")")
-
-                        LET source = isForward ? A : B
-                        LET destination = !isForward ? A : B
-
-                        COLLECT s = source, d = destination
-                        AGGREGATE relations = UNIQUE(e2.type)
-
-                        FOR r IN relations
-                            RETURN CONCAT(s , ' ', r, ' ', d)
+                    FOR v2, e2, p2 IN 1..{max_depth} ANY v1 {graph_name}_LINKS_TO OPTIONS {{uniqueEdges: "path"}}
+                        FOR v3, e3, p3 IN 1..1 OUTBOUND v2 {graph_name}_HAS_SOURCE
+                            FILTER v3._key != doc._key
+                            COLLECT text = v3.text
+                            RETURN text
             )
 
-            RETURN {{[doc._key]: entity_neighborhood}}
+            RETURN {{[doc._key]: source_neighborhood}}
     """
-    # FOR s2 IN 1..1 OUTBOUND v2 {graph_name}_HAS_SOURCE (after aggregate)
 
     bind_vars = {
         "@collection": source_collection_name,
@@ -314,7 +327,11 @@ async def retrieve(
 
         text = page_content
         if neighborhood:
-            text += f"\n--------\nDocument Neighborhood:\n{neighborhood}"
+            text += "\n------\nRELATED INFORMATION:\n------\n"
+            text += neighborhood
+
+        if logflag:
+            logger.info(f"Document: {r.id}, Text: {text}")
 
         search_res_tuples.append((r.id, text, r.metadata))
 
