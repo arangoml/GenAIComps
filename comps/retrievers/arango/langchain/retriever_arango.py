@@ -3,7 +3,7 @@
 
 import os
 import time
-from typing import Any, Optional, Union
+from typing import Any, Union
 
 from arango import ArangoClient
 from config import (
@@ -47,14 +47,6 @@ from comps.cores.proto.api_protocol import (
     RetrievalResponseData,
 )
 
-# TODO: Revisit these classes. How would they be presented in ChatQnA?
-# class ArangoTextDoc(TextDoc):
-#     neighborhood: Optional[list[dict[str, Any]]] = None
-
-# class ArangoRetrievalResponseData(RetrievalResponseData):
-#     neighborhood: Optional[list[dict[str, Any]]] = None
-
-
 logger = CustomLogger("retriever_arango")
 logflag = os.getenv("LOGFLAG", True)
 
@@ -70,30 +62,6 @@ def fetch_neighborhoods(
     """Fetch neighborhoods of source documents. Updates the neighborhoods dictionary in-place."""
     if max_depth < 1:
         max_depth = 1
-
-    # aql = f"""
-    #     FOR doc IN @@collection
-    #         FILTER doc._key IN @keys
-
-    #         LET entity_neighborhood = (
-    #             FOR v1, e1, p1 IN 1..1 INBOUND doc {graph_name}_HAS_SOURCE
-    #                 FOR v2, e2, p2 IN 1..{max_depth} ANY v1 {graph_name}_LINKS_TO
-    #                     LET isForward = (e2._to == v2._id)
-    #                     LET A = CONCAT(p2.vertices[-2].name, " (", p2.vertices[-2].type, ")")
-    #                     LET B = CONCAT(v2.name, " (", v2.type, ")")
-
-    #                     LET source = isForward ? A : B
-    #                     LET destination = !isForward ? A : B
-
-    #                     COLLECT s = source, d = destination
-    #                     AGGREGATE relations = UNIQUE(e2.type)
-
-    #                     FOR r IN relations
-    #                         RETURN CONCAT(s , ' ', r, ' ', d)
-    #         )
-
-    #         RETURN {{[doc._key]: entity_neighborhood}}
-    # """
 
     aql = f"""
         FOR doc IN @@collection
