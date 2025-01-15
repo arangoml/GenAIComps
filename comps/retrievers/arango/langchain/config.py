@@ -19,7 +19,7 @@ ARANGO_NUM_CENTROIDS = int(os.getenv("ARANGO_NUM_CENTROIDS", 1))
 
 # ArangoDB Traversal configuration
 ARANGO_TRAVERSAL_ENABLED = os.getenv("ARANGO_TRAVERSAL_ENABLED", "false").lower() == "true"
-ARANGO_TRAVERSAL_MAX_DEPTH = int(os.getenv("ARANGO_TRAVERSAL_MAX_DEPTH", 1))
+ARANGO_TRAVERSAL_MAX_DEPTH = int(os.getenv("ARANGO_TRAVERSAL_MAX_DEPTH", 0))
 
 # Embedding configuration
 TEI_EMBED_MODEL = os.getenv("TEI_EMBED_MODEL", "BAAI/bge-base-en-v1.5")

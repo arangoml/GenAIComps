@@ -60,8 +60,13 @@ def fetch_neighborhoods(
     max_depth: int,
 ) -> None:
     """Fetch neighborhoods of source documents. Updates the neighborhoods dictionary in-place."""
-    if max_depth < 1:
-        max_depth = 1
+
+    if max_depth <= 0:
+        start_vertex = "v1"
+        links_to_query = ""
+    else:
+        start_vertex = "v2"
+        links_to_query = f"FOR v2 IN 1..{max_depth} ANY v1 {graph_name}_LINKS_TO OPTIONS {{uniqueEdges: 'path'}}"
 
     aql = f"""
         FOR doc IN @@collection
@@ -69,10 +74,10 @@ def fetch_neighborhoods(
 
             LET source_neighborhood = (
                 FOR v1 IN 1..1 INBOUND doc {graph_name}_HAS_SOURCE
-                    FOR v2 IN 1..{max_depth} ANY v1 {graph_name}_LINKS_TO OPTIONS {{uniqueEdges: "path"}}
-                        FOR v3 IN 1..1 OUTBOUND v2 {graph_name}_HAS_SOURCE
-                            FILTER v3._key != doc._key
-                            COLLECT id = v3._key, text = v3.text
+                    {links_to_query}
+                        FOR s IN 1..1 OUTBOUND {start_vertex} {graph_name}_HAS_SOURCE
+                            FILTER s._key != doc._key
+                            COLLECT id = s._key, text = s.{ARANGO_TEXT_FIELD}
                             RETURN {{[id]: text}}
             )
 

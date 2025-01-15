@@ -130,7 +130,7 @@ ArangoDB Collection configuration
 
 ArangoDB Traversal configuration
 - `ARANGO_TRAVERSAL_ENABLED`: If set to True, the retriever will traverse the graph to retrieve the neighborhood of the retrieved documents, using the specified `ARANGO_GRAPH_NAME` as a reference. Defaults to `False`.
-- `ARANGO_TRAVERSAL_MAX_DEPTH`: The maximum depth to traverse the graph. Defaults to `1`.
+- `ARANGO_TRAVERSAL_MAX_DEPTH`: The maximum depth to traverse the graph with regards to entities linked to entities directly associated with source documents. If `0`, traversal is applied as `SOURCE --> ENTITY <--- SOURCE` to find soures that are linked to the same entity. If `1`, traversal is applied as `SOURCE --> ENTITY <--> ENTITY <--- SOURCE` to find sources that are linked to the same entity's linked entity. If `2`, ... and so on. Defaults to `0`.
 
 Embedding Configuration
 - `TEI_EMBED_MODEL`: The model to use for the TEI service. Defaults to `BAAI/bge-base-en-v1.5`.
