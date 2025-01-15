@@ -13,7 +13,7 @@ ARANGO_DB_NAME = os.getenv("ARANGO_DB_NAME", "_system")
 ARANGO_INSERT_ASYNC = os.getenv("ARANGO_INSERT_ASYNC", "false").lower() == "true"
 ARANGO_BATCH_SIZE = int(os.getenv("ARANGO_BATCH_SIZE", 500))
 ARANGO_GRAPH_NAME = os.getenv("ARANGO_GRAPH_NAME", "GRAPH")
-ARANGO_USE_GRAPH_NAME = os.getenv("ARANGO_USE_GRAPH_NAME", "false").lower() == "true"
+ARANGO_USE_GRAPH_NAME = os.getenv("ARANGO_USE_GRAPH_NAME", "true").lower() == "true"
 
 # Text Generation Inference configuration
 TGI_LLM_ENDPOINT = os.getenv("TGI_LLM_ENDPOINT", "http://localhost:8080")
