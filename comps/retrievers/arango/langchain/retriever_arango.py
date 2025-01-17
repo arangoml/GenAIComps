@@ -300,8 +300,8 @@ async def retrieve(
 
         text = page_content
         if neighborhood:
-            text += "\n------\nRELATED CHUNKS:\n------\n"
-            text += f"{neighborhood}\n"
+            text += "\n------\nRELATED CHUNKS FOUND [{ID: TEXT}]:\n------\n"
+            text += str(neighborhood)
 
         if logflag:
             logger.info(f"Document: {r.id}, Text: {text}")
