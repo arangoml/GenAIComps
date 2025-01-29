@@ -11,6 +11,7 @@ services:
       - ARANGO_ROOT_PASSWORD=openSesame
     volumes:
       - arango_data:/var/lib/arangodb3
+    command: ["--experimental-vector-index=true"]
 
 volumes:
   arango_data:
