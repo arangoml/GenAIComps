@@ -41,6 +41,9 @@ from config import (
     TABLE_STRATEGY,
     CHUNK_SIZE,
     CHUNK_OVERLAP,
+    EMBED_SOURCE_DOCUMENTS,
+    EMBED_NODES,
+    EMBED_RELATIONSHIPS
 )
 from fastapi import File, Form, HTTPException, UploadFile
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -160,9 +163,6 @@ def ingest_data_to_arango(doc_path: DocPath) -> str:
         document = Document(page_content=text)
         graph_doc = llm_transformer.process_response(document)
 
-        source = graph_doc.source
-        source.metadata["embedding"] = embeddings.embed_documents([source.page_content])[0]
-
         graph.add_graph_documents(
             graph_documents=[graph_doc],
             include_source=True,
@@ -171,7 +171,11 @@ def ingest_data_to_arango(doc_path: DocPath) -> str:
             batch_size=ARANGO_BATCH_SIZE,
             use_one_entity_collection=True,
             insert_async=ARANGO_INSERT_ASYNC,
-            source_metadata_fields_to_extract_to_top_level={"embedding"},
+            embeddings=embeddings,
+            embedding_field="embedding",
+            embed_source=EMBED_SOURCE_DOCUMENTS,
+            embed_nodes=EMBED_NODES,
+            embed_relationships=EMBED_RELATIONSHIPS,
         )
 
         if logflag:

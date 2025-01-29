@@ -15,6 +15,11 @@ ARANGO_BATCH_SIZE = int(os.getenv("ARANGO_BATCH_SIZE", 500))
 ARANGO_GRAPH_NAME = os.getenv("ARANGO_GRAPH_NAME", "GRAPH")
 ARANGO_USE_GRAPH_NAME = os.getenv("ARANGO_USE_GRAPH_NAME", "true").lower() == "true"
 
+# Embedding Generation Configuration
+EMBED_SOURCE_DOCUMENTS = os.getenv("EMBED_SOURCE_DOCUMENTS", "true").lower() == "true"
+EMBED_NODES = os.getenv("EMBED_NODES", "false").lower() == "true"
+EMBED_RELATIONSHIPS = os.getenv("EMBED_RELATIONSHIPS", "false").lower() == "true"
+
 # Text Generation Inference configuration
 TGI_LLM_ENDPOINT = os.getenv("TGI_LLM_ENDPOINT", "http://localhost:8080")
 TGI_LLM_MAX_NEW_TOKENS = int(os.getenv("TGI_LLM_MAX_NEW_TOKENS", 512))
