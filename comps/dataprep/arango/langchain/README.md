@@ -116,7 +116,7 @@ ArangoDB Connection configuration
 - `ARANGO_DB_NAME`: The name of the database to use for the ArangoDB service.
 
 ArangoDB Graph Insertion configuration
-- `INSERT_ASYNC`: If set to True, the microservice will insert the data into ArangoDB asynchronously. Defaults to `False`.
+- `ARANGO_INSERT_ASYNC`: If set to True, the microservice will insert the data into ArangoDB asynchronously. Defaults to `False`.
 - `ARANGO_BATCH_SIZE`: The batch size for the microservice to insert the data. Defaults to `500`.
 - `ARANGO_GRAPH_NAME`: The name of the graph to use/create in ArangoDB Defaults to `GRAPH`. 
 - `ARANGO_USE_GRAPH_NAME`: If set to True, the microservice will use the graph name specified in the environment variable `ARANGO_GRAPH_NAME`. If set to False, the file name will be used as the graph name. Defaults to `True`.
@@ -134,15 +134,19 @@ Text Embeddings Inferencing Configuration
 - `TEI_EMBEDDING_ENDPOINT`: The endpoint for the TEI service.
 - `HUGGINGFACEHUB_API_TOKEN`: The API token for the Hugging Face Hub.
 - `TEI_EMBED_MODEL`: The model to use for the TEI service. Defaults to `BAAI/bge-base-en-v1.5`.
+- `EMBED_SOURCE_DOCUMENTS`: If set to True, the microservice will embed the source documents. Defaults to `True`.
+- `EMBED_NODES`: If set to True, the microservice will embed the nodes extracted from the source documents. Defaults to `False`.
+- `EMBED_RELATIONSHIPS`: If set to True, the microservice will embed the relationships extracted from the source documents. Defaults to `False`.
 
 OpenAI Configuration:
 **Note**: This configuration can replace the TGI and TEI services for text generation and embeddings.
 - `OPENAI_API_KEY`: The API key for the OpenAI service.
-- `OPENAI_EMBED_MODEL`: The embedding model to use for the OpenAI service. Defaults to `text-embedding-3-small`.
-- `OPENAI_EMBED_DIMENSIONS`: The embedding dimension for the OpenAI service. Defaults to `512`.
 - `OPENAI_CHAT_MODEL`: The chat model to use for the OpenAI service. Defaults to `gpt-4o`.
 - `OPENAI_CHAT_TEMPERATURE`: The temperature for the OpenAI service. Defaults to `0`.
-
+- `OPENAI_EMBED_MODEL`: The embedding model to use for the OpenAI service. Defaults to `text-embedding-3-small`.
+- `OPENAI_EMBED_DIMENSION`: The embedding dimension for the OpenAI service. Defaults to `768`.
+- `OPENAI_CHAT_ENABLED`: If set to True, the microservice will use the OpenAI service for text generation, as long as `OPENAI_API_KEY` is also set. Defaults to `True`.
+- `OPENAI_EMBED_ENABLED`: If set to True, the microservice will use the OpenAI service for text embeddings, as long as `OPENAI_API_KEY` is also set. Defaults to `True`.`
 
 [LangChain LLMGraphTransformer](https://api.python.langchain.com/en/latest/graph_transformers/langchain_experimental.graph_transformers.llm.LLMGraphTransformer.html) Configuration:
 - `SYSTEM_PROMPT_PATH`: The path to the system prompt text file. This can be used to specify the specific system prompt for the entity extraction and graph generation steps.
@@ -150,3 +154,9 @@ OpenAI Configuration:
 - `ALLOWED_RELATIONSHIPS`: Specifies which relationship types are allowed in the graph. Defaults to an empty list, allowing all relationship types.
 - `NODE_PROPERTIES`: If True, the LLM can extract any node properties from text. Alternatively, a list of valid properties can be provided for the LLM to extract, restricting extraction to those specified. Defaults to `["description"]`.
 - `RELATIONSHIP_PROPERTIES`: If True, the LLM can extract any relationship properties from text. Alternatively, a list of valid properties can be provided for the LLM to extract, restricting extraction to those specified. Defaults to `["description"]`.
+
+Parsing Configuration:
+- `PROCESS_TABLE`: If set to True, the microservice will process tables in the document. Defaults to `False`.
+- `TABLE_STRATEGY`: The strategy to understand tables for table retrieval. Defaults to `fast`.
+- `CHUNK_SIZE`: The size of the chunks to process. Defaults to `500`.
+- `CHUNK_OVERLAP`: The overlap between chunks. Defaults to `50`.

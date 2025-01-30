@@ -15,11 +15,6 @@ ARANGO_BATCH_SIZE = int(os.getenv("ARANGO_BATCH_SIZE", 500))
 ARANGO_GRAPH_NAME = os.getenv("ARANGO_GRAPH_NAME", "GRAPH")
 ARANGO_USE_GRAPH_NAME = os.getenv("ARANGO_USE_GRAPH_NAME", "true").lower() == "true"
 
-# Embedding Generation Configuration
-EMBED_SOURCE_DOCUMENTS = os.getenv("EMBED_SOURCE_DOCUMENTS", "true").lower() == "true"
-EMBED_NODES = os.getenv("EMBED_NODES", "false").lower() == "true"
-EMBED_RELATIONSHIPS = os.getenv("EMBED_RELATIONSHIPS", "false").lower() == "true"
-
 # Text Generation Inference configuration
 TGI_LLM_ENDPOINT = os.getenv("TGI_LLM_ENDPOINT", "http://localhost:8080")
 TGI_LLM_MAX_NEW_TOKENS = int(os.getenv("TGI_LLM_MAX_NEW_TOKENS", 512))
@@ -32,6 +27,9 @@ TGI_LLM_TIMEOUT = int(os.getenv("TGI_LLM_TIMEOUT", 600))
 TEI_EMBEDDING_ENDPOINT = os.getenv("TEI_EMBEDDING_ENDPOINT")
 HUGGINGFACEHUB_API_TOKEN = os.getenv("HUGGINGFACEHUB_API_TOKEN")
 TEI_EMBED_MODEL = os.getenv("TEI_EMBED_MODEL", "BAAI/bge-base-en-v1.5")
+EMBED_SOURCE_DOCUMENTS = os.getenv("EMBED_SOURCE_DOCUMENTS", "true").lower() == "true"
+EMBED_NODES = os.getenv("EMBED_NODES", "false").lower() == "true"
+EMBED_RELATIONSHIPS = os.getenv("EMBED_RELATIONSHIPS", "false").lower() == "true"
 
 # OpenAI configuration (alternative to TGI & TEI)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -52,5 +50,5 @@ RELATIONSHIP_PROPERTIES = os.getenv("RELATIONSHIP_PROPERTIES", ["description"])
 # Parsing configuration
 PROCESS_TABLE = os.getenv("PROCESS_TABLE", "false").lower() == "true"
 TABLE_STRATEGY = os.getenv("TABLE_STRATEGY", "fast")
-CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", 1500))
-CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", 100))
+CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", 500))
+CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", 50))
