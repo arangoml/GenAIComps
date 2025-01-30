@@ -5,6 +5,7 @@ import os
 import time
 from typing import Any, Union
 
+import openai
 from arango import ArangoClient
 from config import (
     ARANGO_DB_NAME,
@@ -16,18 +17,30 @@ from config import (
     ARANGO_TEXT_FIELD,
     ARANGO_TRAVERSAL_ENABLED,
     ARANGO_TRAVERSAL_MAX_DEPTH,
+    ARANGO_TRAVERSAL_MAX_RETURNED,
     ARANGO_URL,
     ARANGO_USE_APPROX_SEARCH,
     ARANGO_USERNAME,
     HUGGINGFACEHUB_API_TOKEN,
     OPENAI_API_KEY,
+    OPENAI_CHAT_ENABLED,
+    OPENAI_CHAT_MODEL,
+    OPENAI_CHAT_TEMPERATURE,
     OPENAI_EMBED_MODEL,
+    SUMMARIZER_ENABLED,
     TEI_EMBED_MODEL,
     TEI_EMBEDDING_ENDPOINT,
+    TGI_LLM_ENDPOINT,
+    TGI_LLM_MAX_NEW_TOKENS,
+    TGI_LLM_TEMPERATURE,
+    TGI_LLM_TIMEOUT,
+    TGI_LLM_TOP_K,
+    TGI_LLM_TOP_P,
 )
 from langchain_community.embeddings import HuggingFaceBgeEmbeddings, HuggingFaceHubEmbeddings
+from langchain_community.llms import HuggingFaceEndpoint
 from langchain_community.vectorstores.arangodb_vector import ArangoVector
-from langchain_openai import OpenAIEmbeddings
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 from comps import (
     CustomLogger,
@@ -54,19 +67,29 @@ logflag = os.getenv("LOGFLAG", True)
 def fetch_neighborhoods(
     vector_db: ArangoVector,
     keys: list[str],
-    neighborhoods: dict[str, Any],
     graph_name: str,
     source_collection_name: str,
-    max_depth: int,
-) -> None:
-    """Fetch neighborhoods of source documents. Updates the neighborhoods dictionary in-place."""
+) -> dict[str, Any]:
+    """Fetch neighborhoods of source documents"""
 
-    if max_depth <= 0:
+    if ARANGO_TRAVERSAL_MAX_DEPTH <= 0:
         start_vertex = "v1"
         links_to_query = ""
     else:
         start_vertex = "v2"
-        links_to_query = f"FOR v2 IN 1..{max_depth} ANY v1 {graph_name}_LINKS_TO OPTIONS {{uniqueEdges: 'path'}}"
+        links_to_query = (
+            f"FOR v2 IN 1..{ARANGO_TRAVERSAL_MAX_DEPTH} ANY v1 {graph_name}_LINKS_TO OPTIONS {{uniqueEdges: 'path'}}"
+        )
+
+    if ARANGO_TRAVERSAL_MAX_RETURNED <= 0:
+        limit_query = ""
+    else:
+        # TODO: Revisit strategy for limiting returned neighborhoods
+        limit_query = f"""
+            LET score = COSINE_SIMILARITY(doc.{ARANGO_EMBEDDING_FIELD}, s.{ARANGO_EMBEDDING_FIELD})
+            SORT score DESC
+            LIMIT {ARANGO_TRAVERSAL_MAX_RETURNED}
+        """
 
     aql = f"""
         FOR doc IN @@collection
@@ -77,6 +100,7 @@ def fetch_neighborhoods(
                     {links_to_query}
                         FOR s IN 1..1 OUTBOUND {start_vertex} {graph_name}_HAS_SOURCE
                             FILTER s._key != doc._key
+                            {limit_query}
                             COLLECT id = s._key, text = s.{ARANGO_TEXT_FIELD}
                             RETURN {{[id]: text}}
             )
@@ -91,11 +115,11 @@ def fetch_neighborhoods(
 
     cursor = vector_db.db.aql.execute(aql, bind_vars=bind_vars)
 
+    neighborhoods = {}
     for doc in cursor:
         neighborhoods.update(doc)
 
-    if logflag:
-        logger.info(f"Fetched neighborhoods for {len(neighborhoods)} documents.")
+    return neighborhoods
 
 
 @register_microservice(
@@ -224,6 +248,9 @@ async def retrieve(
     # Compute Similarity #
     ######################
 
+    if logflag:
+        logger.info(f"Searching for similar documents...")
+
     vector_db = ArangoVector(
         embedding=embeddings,
         embedding_dimension=dimension,
@@ -274,39 +301,69 @@ async def retrieve(
 
         return empty_result
 
+    if logflag:
+        logger.info(f"Found {len(search_res)} documents.")
+
     ########################################
     # Traverse Source Documents (optional) #
     ########################################
 
-    neighborhoods = {}
     if ARANGO_TRAVERSAL_ENABLED:
-        fetch_neighborhoods(
+        neighborhoods = fetch_neighborhoods(
             vector_db=vector_db,
             keys=[r.id for r in search_res],
-            neighborhoods=neighborhoods,
             graph_name=graph_name,
             source_collection_name=source_collection_name,
-            max_depth=ARANGO_TRAVERSAL_MAX_DEPTH,
         )
+
+        for r in search_res:
+            neighborhood = neighborhoods.get(r.id)
+
+            if neighborhood:
+                r.page_content += "\n------\nRELATED CHUNKS:\n------\n"
+                r.page_content += str(neighborhood)
+
+        if logflag:
+            logger.info(f"Added neighborhoods to {len(search_res)} documents.")
+
+    ################################
+    # Summarize Results (optional) #
+    ################################
+
+    if SUMMARIZER_ENABLED:
+        # TODO: Revisit the quality of this template and parameterize it.
+        def generate_prompt(query: str, text: str) -> str:
+            return f"""
+                I've performed vector similarity on the following
+                query to retrieve most relevant documents: '{query}' 
+
+                Each retrieved document may have a 'RELATED CHUNKS' section.
+
+                Please consider summarizing the text below using query as the foundation to summarize the text.
+
+                The text: {text}
+
+                Provide a summart to include all content relevant to the query, using the RELATED CHUNKS section (if provided) as needed.
+
+                Your summary:
+            """
+
+        for r in search_res:
+            prompt = generate_prompt(query, r.page_content)
+
+            summarized_text = llm.invoke(prompt).content
+            tokens_used = llm.invoke(prompt).usage_metadata
+
+            if logflag:
+                logger.info(f"Summarized {id} (used {tokens_used} tokens)")
+
+            r.page_content = summarized_text
 
     ####################
     # Process Response #
     ####################
 
-    search_res_tuples = []
-    for r in search_res:
-        page_content = r.page_content
-        neighborhood = neighborhoods.get(r.id)
-
-        text = page_content
-        if neighborhood:
-            text += "\n------\nRELATED CHUNKS FOUND [{ID: TEXT}]:\n------\n"
-            text += str(neighborhood)
-
-        if logflag:
-            logger.info(f"Document: {r.id}, Text: {text}")
-
-        search_res_tuples.append((r.id, text, r.metadata))
+    search_res_tuples = [(r.id, r.page_content, r.metadata) for r in search_res]
 
     retrieved_docs: Union[list[TextDoc], list[RetrievalResponseData]] = []
     if isinstance(input, EmbedDoc):
@@ -335,6 +392,45 @@ async def retrieve(
 
 
 if __name__ == "__main__":
+
+    ########################################
+    # Text Generation Inference (optional) #
+    ########################################
+
+    if OPENAI_API_KEY and OPENAI_CHAT_ENABLED:
+        if logflag:
+            logger.info("OpenAI API Key is set. Verifying its validity...")
+        openai.api_key = OPENAI_API_KEY
+
+        try:
+            openai.models.list()
+
+            if logflag:
+                logger.info("OpenAI API Key is valid.")
+
+            llm = ChatOpenAI(temperature=OPENAI_CHAT_TEMPERATURE, max_tokens=512, model_name=OPENAI_CHAT_MODEL)
+        except openai.error.AuthenticationError:
+            if logflag:
+                logger.info("OpenAI API Key is invalid.")
+        except Exception as e:
+            if logflag:
+                logger.info(f"An error occurred while verifying the API Key: {e}")
+
+    elif TGI_LLM_ENDPOINT:
+        llm = HuggingFaceEndpoint(
+            endpoint_url=TGI_LLM_ENDPOINT,
+            max_new_tokens=TGI_LLM_MAX_NEW_TOKENS,
+            top_k=TGI_LLM_TOP_K,
+            top_p=TGI_LLM_TOP_P,
+            temperature=TGI_LLM_TEMPERATURE,
+            timeout=TGI_LLM_TIMEOUT,
+        )
+    else:
+        raise ValueError("No text generation environment variables are set, cannot generate graphs.")
+
+    ############
+    # ArangoDB #
+    ############
 
     client = ArangoClient(hosts=ARANGO_URL)
     sys_db = client.db(name="_system", username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)

@@ -6,6 +6,7 @@ langchain
 git+https://github.com/arangoml/langchain.git@arangodb#subdirectory=libs/community
 langchain_openai
 python-arango
+openai
 numpy
 opentelemetry-api
 opentelemetry-exporter-otlp
