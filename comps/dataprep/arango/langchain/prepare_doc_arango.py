@@ -202,7 +202,14 @@ def ingest_data_to_arango(doc_path: DocPath) -> str:
 
     for i, text in enumerate(chunks):
         document = Document(page_content=text)
+
+        if logflag:
+            logger.info(f"Chunk {i}: extracting nodes & relationships.")
+
         graph_doc = llm_transformer.process_response(document)
+
+        if logflag:
+            logger.info(f"Chunk {i}: inserting into ArangoDB.")
 
         graph.add_graph_documents(
             graph_documents=[graph_doc],
@@ -220,7 +227,7 @@ def ingest_data_to_arango(doc_path: DocPath) -> str:
         )
 
         if logflag:
-            logger.info(f"Chunk {i} processed into graph.")
+            logger.info(f"Chunk {i}: processed.")
 
     if logflag:
         logger.info("The graph is built.")
