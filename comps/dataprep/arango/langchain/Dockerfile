@@ -12,6 +12,7 @@ RUN apt-get update -y && apt-get install -y --no-install-recommends --fix-missin
     default-jre \
     libgl1-mesa-glx \
     libjemalloc-dev \
+    tesseract-ocr \
     git
 
 RUN useradd -m -s /bin/bash user && \
@@ -23,6 +24,7 @@ USER user
 COPY comps /home/user/comps
 
 RUN pip install --no-cache-dir --upgrade pip setuptools && \
+    pip install --no-cache-dir json-repair && \
     if [ ${ARCH} = "cpu" ]; then pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu; fi && \
     pip install --no-cache-dir -r /home/user/comps/dataprep/arango/langchain/requirements.txt
 
