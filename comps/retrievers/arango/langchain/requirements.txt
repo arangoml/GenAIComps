@@ -3,6 +3,7 @@ fastapi
 frontend
 huggingface_hub
 langchain
+langchain_huggingface
 git+https://github.com/arangoml/langchain.git@arangodb#subdirectory=libs/community
 langchain_openai
 python-arango
