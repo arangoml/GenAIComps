@@ -49,10 +49,10 @@ from fastapi import File, Form, HTTPException, UploadFile
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceBgeEmbeddings, HuggingFaceHubEmbeddings
 from langchain_community.graphs.arangodb_graph import ArangoGraph
-from langchain_community.llms import HuggingFaceEndpoint
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_experimental.graph_transformers import LLMGraphTransformer
+from langchain_huggingface import HuggingFaceEndpoint
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_text_splitters import HTMLHeaderTextSplitter
 
@@ -70,6 +70,47 @@ logger = CustomLogger("prepare_doc_arango")
 logflag = os.getenv("LOGFLAG", True)
 
 upload_folder = "./uploaded_files/"
+
+
+class HuggingFaceEndpointPatch(HuggingFaceEndpoint):
+    def _call(
+        self,
+        prompt,
+        stop=None,
+        run_manager=None,
+        **kwargs,
+    ) -> str:
+        """Call out to HuggingFace Hub's inference endpoint."""
+        import json
+
+        invocation_params = self._invocation_params(stop, **kwargs)
+        if self.streaming:
+            completion = ""
+            for chunk in self._stream(prompt, stop, run_manager, **invocation_params):
+                completion += chunk.text
+            return completion
+        else:
+            invocation_params["stop"] = invocation_params[
+                "stop_sequences"
+            ]  # porting 'stop_sequences' into the 'stop' argument
+            response = self.client.post(
+                json={"inputs": prompt, "parameters": invocation_params},
+                stream=False,
+                task=self.task,
+                # NOTE: This is the only change from the original method
+                # So far I have yet to find a way to use the original class.
+                # In this case, self.model is set to TGI_LLM_ENDPOINT:
+                model=self.model,
+            )
+            response_text = json.loads(response.decode())[0]["generated_text"]
+
+            # Maybe the generation has stopped at one of the stop sequences:
+            # then we remove this stop sequence from the end of the generated text
+            for stop_seq in invocation_params["stop_sequences"]:
+                if response_text[-len(stop_seq) :] == stop_seq:
+                    response_text = response_text[: -len(stop_seq)]
+            return response_text
+
 
 PROMPT_TEMPLATE = None
 if SYSTEM_PROMPT_PATH is not None:
@@ -303,7 +344,7 @@ if __name__ == "__main__":
                 logger.info(f"An error occurred while verifying the API Key: {e}")
 
     elif TGI_LLM_ENDPOINT:
-        llm = HuggingFaceEndpoint(
+        llm = HuggingFaceEndpointPatch(
             endpoint_url=TGI_LLM_ENDPOINT,
             max_new_tokens=TGI_LLM_MAX_NEW_TOKENS,
             top_k=TGI_LLM_TOP_K,
