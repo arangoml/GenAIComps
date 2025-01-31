@@ -377,13 +377,13 @@ async def retrieve(
                 I've performed vector similarity on the following
                 query to retrieve most relevant documents: '{query}' 
 
-                Each retrieved document may have a 'RELATED CHUNKS' section.
+                Each retrieved Document may have a 'RELATED CHUNKS' section.
 
-                Please consider summarizing the text below using query as the foundation to summarize the text.
+                Please consider summarizing the Document below using the query as the foundation to summarize the text.
 
-                The text: {text}
+                The Document: {text}
 
-                Provide a summart to include all content relevant to the query, using the RELATED CHUNKS section (if provided) as needed.
+                Provide a summary to include all content relevant to the query, using the RELATED CHUNKS section (if provided) as needed.
 
                 Your summary:
             """
@@ -396,7 +396,7 @@ async def retrieve(
             tokens_used = res.usage_metadata
 
             if logflag:
-                logger.info(f"Summarized {id} (used {tokens_used} tokens)")
+                logger.info(f"Summarized {r.id} (used {tokens_used} tokens)")
 
             r.page_content = summarized_text
 
