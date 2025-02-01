@@ -35,7 +35,6 @@ from config import (
     VLLM_MODEL_ID,
     VLLM_TEMPERATURE,
     VLLM_TIMEOUT,
-    VLLM_TOP_K,
     VLLM_TOP_P,
 )
 from langchain_community.embeddings import HuggingFaceBgeEmbeddings, HuggingFaceHubEmbeddings
@@ -410,7 +409,7 @@ if __name__ == "__main__":
             openai.models.list()
             if logflag:
                 logger.info("OpenAI API Key is valid.")
-            llm = ChatOpenAI(temperature=OPENAI_CHAT_TEMPERATURE, model=OPENAI_CHAT_MODEL)
+            llm = ChatOpenAI(temperature=OPENAI_CHAT_TEMPERATURE, model=OPENAI_CHAT_MODEL, max_tokens=512)
         except openai.error.AuthenticationError:
             if logflag:
                 logger.info("OpenAI API Key is invalid.")
@@ -424,8 +423,7 @@ if __name__ == "__main__":
             openai_api_base=f"{VLLM_ENDPOINT}/v1",
             model=VLLM_MODEL_ID,
             temperature=VLLM_TEMPERATURE,
-            # max_completion_tokens=VLLM_MAX_NEW_TOKENS, # TODO: Verify
-            # top_k=VLLM_TOP_K, # TODO: Verify
+            max_tokens=VLLM_MAX_NEW_TOKENS,
             top_p=VLLM_TOP_P,
             timeout=VLLM_TIMEOUT,
         )

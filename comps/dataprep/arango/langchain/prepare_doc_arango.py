@@ -43,7 +43,6 @@ from config import (
     VLLM_MODEL_ID,
     VLLM_TEMPERATURE,
     VLLM_TIMEOUT,
-    VLLM_TOP_K,
     VLLM_TOP_P,
 )
 from fastapi import File, Form, HTTPException, UploadFile
@@ -318,8 +317,7 @@ if __name__ == "__main__":
             openai_api_base=f"{VLLM_ENDPOINT}/v1",
             model=VLLM_MODEL_ID,
             temperature=VLLM_TEMPERATURE,
-            # max_completion_tokens=VLLM_MAX_NEW_TOKENS, # TODO: Verify
-            # top_k=VLLM_TOP_K, # TODO: Verify
+            max_tokens=VLLM_MAX_NEW_TOKENS,
             top_p=VLLM_TOP_P,
             timeout=VLLM_TIMEOUT,
         )

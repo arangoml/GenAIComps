@@ -145,7 +145,6 @@ vLLM configuration
 - `VLLM_ENDPOINT`: The endpoint for the VLLM service. Defaults to `http://localhost:9009`.
 - `VLLM_MODEL_ID`: The model ID for the VLLM service. Defaults to `Intel/neural-chat-7b-v3-3`.
 - `VLLM_MAX_NEW_TOKENS`: The maximum number of new tokens to generate. Defaults to `512`.
-- `VLLM_TOP_K`: The number of highest probability vocabulary tokens to keep for top-k-filtering. Defaults to `40`.
 - `VLLM_TOP_P`: If set to < 1, only the smallest set of most probable tokens with probabilities that add up to top_p or higher are kept for generation. Defaults to `0.9`.
 - `VLLM_TEMPERATURE`: The temperature for the sampling. Defaults to `0.8`.
 - `VLLM_TIMEOUT`: The timeout for the VLLM service. Defaults to `600`.
