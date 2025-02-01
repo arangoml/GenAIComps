@@ -30,16 +30,16 @@ from config import (
     SUMMARIZER_ENABLED,
     TEI_EMBED_MODEL,
     TEI_EMBEDDING_ENDPOINT,
-    TGI_LLM_ENDPOINT,
-    TGI_LLM_MAX_NEW_TOKENS,
-    TGI_LLM_TEMPERATURE,
-    TGI_LLM_TIMEOUT,
-    TGI_LLM_TOP_K,
-    TGI_LLM_TOP_P,
+    VLLM_ENDPOINT,
+    VLLM_MAX_NEW_TOKENS,
+    VLLM_MODEL_ID,
+    VLLM_TEMPERATURE,
+    VLLM_TIMEOUT,
+    VLLM_TOP_K,
+    VLLM_TOP_P,
 )
 from langchain_community.embeddings import HuggingFaceBgeEmbeddings, HuggingFaceHubEmbeddings
 from langchain_community.vectorstores.arangodb_vector import ArangoVector
-from langchain_huggingface import HuggingFaceEndpoint
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 from comps import (
@@ -62,46 +62,6 @@ from comps.cores.proto.api_protocol import (
 
 logger = CustomLogger("retriever_arango")
 logflag = os.getenv("LOGFLAG", True)
-
-
-class HuggingFaceEndpointPatch(HuggingFaceEndpoint):
-    def _call(
-        self,
-        prompt,
-        stop=None,
-        run_manager=None,
-        **kwargs,
-    ) -> str:
-        """Call out to HuggingFace Hub's inference endpoint."""
-        import json
-
-        invocation_params = self._invocation_params(stop, **kwargs)
-        if self.streaming:
-            completion = ""
-            for chunk in self._stream(prompt, stop, run_manager, **invocation_params):
-                completion += chunk.text
-            return completion
-        else:
-            invocation_params["stop"] = invocation_params[
-                "stop_sequences"
-            ]  # porting 'stop_sequences' into the 'stop' argument
-            response = self.client.post(
-                json={"inputs": prompt, "parameters": invocation_params},
-                stream=False,
-                task=self.task,
-                # NOTE: This is the only change from the original method
-                # So far I have yet to find a way to use the original class.
-                # In this case, self.model is set to TGI_LLM_ENDPOINT:
-                model=self.model,
-            )
-            response_text = json.loads(response.decode())[0]["generated_text"]
-
-            # Maybe the generation has stopped at one of the stop sequences:
-            # then we remove this stop sequence from the end of the generated text
-            for stop_seq in invocation_params["stop_sequences"]:
-                if response_text[-len(stop_seq) :] == stop_seq:
-                    response_text = response_text[: -len(stop_seq)]
-            return response_text
 
 
 def fetch_neighborhoods(
@@ -438,6 +398,9 @@ if __name__ == "__main__":
     # Text Generation Inference (optional) #
     ########################################
 
+    # Ref: https://api.python.langchain.com/en/latest/graph_transformers/langchain_experimental.graph_transformers.llm.LLMGraphTransformer.html#langchain_experimental.graph_transformers.llm.LLMGraphTransformer.__init__
+    ignore_tool_usage = False
+
     if OPENAI_API_KEY and OPENAI_CHAT_ENABLED:
         if logflag:
             logger.info("OpenAI API Key is set. Verifying its validity...")
@@ -445,11 +408,9 @@ if __name__ == "__main__":
 
         try:
             openai.models.list()
-
             if logflag:
                 logger.info("OpenAI API Key is valid.")
-
-            llm = ChatOpenAI(temperature=OPENAI_CHAT_TEMPERATURE, max_tokens=512, model_name=OPENAI_CHAT_MODEL)
+            llm = ChatOpenAI(temperature=OPENAI_CHAT_TEMPERATURE, model=OPENAI_CHAT_MODEL)
         except openai.error.AuthenticationError:
             if logflag:
                 logger.info("OpenAI API Key is invalid.")
@@ -457,15 +418,20 @@ if __name__ == "__main__":
             if logflag:
                 logger.info(f"An error occurred while verifying the API Key: {e}")
 
-    elif TGI_LLM_ENDPOINT:
-        llm = HuggingFaceEndpointPatch(
-            endpoint_url=TGI_LLM_ENDPOINT,
-            max_new_tokens=TGI_LLM_MAX_NEW_TOKENS,
-            top_k=TGI_LLM_TOP_K,
-            top_p=TGI_LLM_TOP_P,
-            temperature=TGI_LLM_TEMPERATURE,
-            timeout=TGI_LLM_TIMEOUT,
+    elif VLLM_ENDPOINT:
+        llm = ChatOpenAI(
+            openai_api_key="EMPTY",
+            openai_api_base=f"{VLLM_ENDPOINT}/v1",
+            model=VLLM_MODEL_ID,
+            temperature=VLLM_TEMPERATURE,
+            # max_completion_tokens=VLLM_MAX_NEW_TOKENS, # TODO: Verify
+            # top_k=VLLM_TOP_K, # TODO: Verify
+            top_p=VLLM_TOP_P,
+            timeout=VLLM_TIMEOUT,
         )
+
+        # Setting this to False with VLLM causes Internal Server Error
+        ignore_tool_usage = True  # TODO: Revisit this HACK
     else:
         raise ValueError("No text generation environment variables are set, cannot generate graphs.")
 

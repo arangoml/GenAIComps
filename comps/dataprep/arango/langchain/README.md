@@ -93,7 +93,7 @@ We support table extraction from pdf documents. You can specify `process_table` 
 - `table_strategy` refers to the strategies to understand tables for table retrieval. As the setting progresses from `"fast"` to `"hq"` to `"llm"`, the focus shifts towards deeper table understanding at the expense of processing speed. The default strategy is `"fast"`.
 - `process_table` refers to whether to process tables in the document. The default value is `False`.
 
-Note: If you specify `"table_strategy=llm"`, you should first start the TGI Service. Please refer to 1.2.1, 1.3.1 in https://github.com/opea-project/GenAIComps/tree/main/comps/llms/README.md, and then `export TGI_LLM_ENDPOINT="http://${your_ip}:8008"`.
+Note: If you specify `"table_strategy=llm"`, you should first start the [vLLM Service](https://github.com/opea-project/GenAIComps/tree/main/comps/third_parties/vllm).
 
 ```bash
 curl -X POST \
@@ -121,13 +121,14 @@ ArangoDB Graph Insertion configuration
 - `ARANGO_GRAPH_NAME`: The name of the graph to use/create in ArangoDB Defaults to `GRAPH`. 
 - `ARANGO_USE_GRAPH_NAME`: If set to True, the microservice will use the graph name specified in the environment variable `ARANGO_GRAPH_NAME`. If set to False, the file name will be used as the graph name. Defaults to `True`.
 
-Text Generation Inference Configuration
-- `TGI_LLM_ENDPOINT`: The endpoint for the TGI service.
-- `TGI_LLM_MAX_NEW_TOKENS`: The maximum number of new tokens to generate. Defaults to `512`.
-- `TGI_LLM_TOP_K`: The number of highest probability vocabulary tokens to keep for top-k-filtering. Defaults to `40`.
-- `TGI_LLM_TOP_P`: If set to < 1, only the smallest set of most probable tokens with probabilities that add up to top_p or higher are kept for generation. Defaults to `0.9`.
-- `TGI_LLM_TEMPERATURE`: The temperature for the sampling. Defaults to `0.8`.
-- `TGI_LLM_TIMEOUT`: The timeout for the TGI service. Defaults to `600`.
+vLLM Configuration
+- `VLLM_ENDPOINT`: The endpoint for the VLLM service. Defaults to `http://localhost:9009`.
+- `VLLM_MODEL_ID`: The model ID for the VLLM service. Defaults to `Intel/neural-chat-7b-v3-3`.
+- `VLLM_MAX_NEW_TOKENS`: The maximum number of new tokens to generate. Defaults to `512`.
+- `VLLM_TOP_K`: The number of highest probability vocabulary tokens to keep for top-k-filtering. Defaults to `40`.
+- `VLLM_TOP_P`: If set to < 1, only the smallest set of most probable tokens with probabilities that add up to top_p or higher are kept for generation. Defaults to `0.9`.
+- `VLLM_TEMPERATURE`: The temperature for the sampling. Defaults to `0.8`.
+- `VLLM_TIMEOUT`: The timeout for the VLLM service. Defaults to `600`.
 
 Text Embeddings Inferencing Configuration
 **Note**: This is optional functionality to generate embeddings for documents (i.e text chunks). 
@@ -139,7 +140,7 @@ Text Embeddings Inferencing Configuration
 - `EMBED_RELATIONSHIPS`: If set to True, the microservice will embed the relationships extracted from the source documents. Defaults to `False`.
 
 OpenAI Configuration:
-**Note**: This configuration can replace the TGI and TEI services for text generation and embeddings.
+**Note**: This configuration can replace the VLLM and TEI services for text generation and embeddings.
 - `OPENAI_API_KEY`: The API key for the OpenAI service.
 - `OPENAI_CHAT_MODEL`: The chat model to use for the OpenAI service. Defaults to `gpt-4o`.
 - `OPENAI_CHAT_TEMPERATURE`: The temperature for the OpenAI service. Defaults to `0`.

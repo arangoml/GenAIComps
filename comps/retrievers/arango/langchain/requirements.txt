@@ -22,3 +22,4 @@ sentence_transformers
 shortuuid
 tiktoken
 uvicorn
+json-repair

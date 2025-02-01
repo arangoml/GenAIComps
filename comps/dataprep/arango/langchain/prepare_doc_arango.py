@@ -38,12 +38,13 @@ from config import (
     TABLE_STRATEGY,
     TEI_EMBED_MODEL,
     TEI_EMBEDDING_ENDPOINT,
-    TGI_LLM_ENDPOINT,
-    TGI_LLM_MAX_NEW_TOKENS,
-    TGI_LLM_TEMPERATURE,
-    TGI_LLM_TIMEOUT,
-    TGI_LLM_TOP_K,
-    TGI_LLM_TOP_P,
+    VLLM_ENDPOINT,
+    VLLM_MAX_NEW_TOKENS,
+    VLLM_MODEL_ID,
+    VLLM_TEMPERATURE,
+    VLLM_TIMEOUT,
+    VLLM_TOP_K,
+    VLLM_TOP_P,
 )
 from fastapi import File, Form, HTTPException, UploadFile
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -52,7 +53,6 @@ from langchain_community.graphs.arangodb_graph import ArangoGraph
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_experimental.graph_transformers import LLMGraphTransformer
-from langchain_huggingface import HuggingFaceEndpoint
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_text_splitters import HTMLHeaderTextSplitter
 
@@ -70,47 +70,6 @@ logger = CustomLogger("prepare_doc_arango")
 logflag = os.getenv("LOGFLAG", True)
 
 upload_folder = "./uploaded_files/"
-
-
-class HuggingFaceEndpointPatch(HuggingFaceEndpoint):
-    def _call(
-        self,
-        prompt,
-        stop=None,
-        run_manager=None,
-        **kwargs,
-    ) -> str:
-        """Call out to HuggingFace Hub's inference endpoint."""
-        import json
-
-        invocation_params = self._invocation_params(stop, **kwargs)
-        if self.streaming:
-            completion = ""
-            for chunk in self._stream(prompt, stop, run_manager, **invocation_params):
-                completion += chunk.text
-            return completion
-        else:
-            invocation_params["stop"] = invocation_params[
-                "stop_sequences"
-            ]  # porting 'stop_sequences' into the 'stop' argument
-            response = self.client.post(
-                json={"inputs": prompt, "parameters": invocation_params},
-                stream=False,
-                task=self.task,
-                # NOTE: This is the only change from the original method
-                # So far I have yet to find a way to use the original class.
-                # In this case, self.model is set to TGI_LLM_ENDPOINT:
-                model=self.model,
-            )
-            response_text = json.loads(response.decode())[0]["generated_text"]
-
-            # Maybe the generation has stopped at one of the stop sequences:
-            # then we remove this stop sequence from the end of the generated text
-            for stop_seq in invocation_params["stop_sequences"]:
-                if response_text[-len(stop_seq) :] == stop_seq:
-                    response_text = response_text[: -len(stop_seq)]
-            return response_text
-
 
 PROMPT_TEMPLATE = None
 if SYSTEM_PROMPT_PATH is not None:
@@ -333,6 +292,9 @@ if __name__ == "__main__":
     # Text Generation Inference #
     #############################
 
+    # Ref: https://api.python.langchain.com/en/latest/graph_transformers/langchain_experimental.graph_transformers.llm.LLMGraphTransformer.html#langchain_experimental.graph_transformers.llm.LLMGraphTransformer.__init__
+    ignore_tool_usage = False
+
     if OPENAI_API_KEY and OPENAI_CHAT_ENABLED:
         if logflag:
             logger.info("OpenAI API Key is set. Verifying its validity...")
@@ -350,15 +312,20 @@ if __name__ == "__main__":
             if logflag:
                 logger.info(f"An error occurred while verifying the API Key: {e}")
 
-    elif TGI_LLM_ENDPOINT:
-        llm = HuggingFaceEndpointPatch(
-            endpoint_url=TGI_LLM_ENDPOINT,
-            max_new_tokens=TGI_LLM_MAX_NEW_TOKENS,
-            top_k=TGI_LLM_TOP_K,
-            top_p=TGI_LLM_TOP_P,
-            temperature=TGI_LLM_TEMPERATURE,
-            timeout=TGI_LLM_TIMEOUT,
+    elif VLLM_ENDPOINT:
+        llm = ChatOpenAI(
+            openai_api_key="EMPTY",
+            openai_api_base=f"{VLLM_ENDPOINT}/v1",
+            model=VLLM_MODEL_ID,
+            temperature=VLLM_TEMPERATURE,
+            # max_completion_tokens=VLLM_MAX_NEW_TOKENS, # TODO: Verify
+            # top_k=VLLM_TOP_K, # TODO: Verify
+            top_p=VLLM_TOP_P,
+            timeout=VLLM_TIMEOUT,
         )
+
+        # Setting this to False with VLLM causes Internal Server Error
+        ignore_tool_usage = True  # TODO: Revisit this HACK
     else:
         raise ValueError("No text generation environment variables are set, cannot generate graphs.")
 
@@ -370,13 +337,14 @@ if __name__ == "__main__":
             prompt=PROMPT_TEMPLATE,
             node_properties=NODE_PROPERTIES or False,
             relationship_properties=RELATIONSHIP_PROPERTIES or False,
+            ignore_tool_usage=ignore_tool_usage,
         )
     except (TypeError, ValueError) as e:
         if logflag:
             logger.warning(f"Advanced LLMGraphTransformer failed: {e}")
         # Fall back to basic config
         try:
-            llm_transformer = LLMGraphTransformer(llm=llm)
+            llm_transformer = LLMGraphTransformer(llm=llm, ignore_tool_usage=ignore_tool_usage)
         except (TypeError, ValueError) as e:
             if logflag:
                 logger.error(f"Failed to initialize LLMGraphTransformer: {e}")

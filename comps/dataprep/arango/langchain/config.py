@@ -15,13 +15,14 @@ ARANGO_BATCH_SIZE = os.getenv("ARANGO_BATCH_SIZE", 500)
 ARANGO_GRAPH_NAME = os.getenv("ARANGO_GRAPH_NAME", "GRAPH")
 ARANGO_USE_GRAPH_NAME = os.getenv("ARANGO_USE_GRAPH_NAME", "true").lower() == "true"
 
-# Text Generation Inference configuration
-TGI_LLM_ENDPOINT = os.getenv("TGI_LLM_ENDPOINT", "http://localhost:8080")
-TGI_LLM_MAX_NEW_TOKENS = os.getenv("TGI_LLM_MAX_NEW_TOKENS", 512)
-TGI_LLM_TOP_K = os.getenv("TGI_LLM_TOP_K", 40)
-TGI_LLM_TOP_P = os.getenv("TGI_LLM_TOP_P", 0.9)
-TGI_LLM_TEMPERATURE = os.getenv("TGI_LLM_TEMPERATURE", 0.8)
-TGI_LLM_TIMEOUT = os.getenv("TGI_LLM_TIMEOUT", 600)
+# VLLM configuration
+VLLM_ENDPOINT = os.getenv("VLLM_ENDPOINT", "http://localhost:9090")
+VLLM_MODEL_ID = os.getenv("VLLM_MODEL_ID", "Intel/neural-chat-7b-v3-3")
+VLLM_MAX_NEW_TOKENS = os.getenv("VLLM_MAX_NEW_TOKENS", 512)
+VLLM_TOP_K = os.getenv("VLLM_TOP_K", 40)
+VLLM_TOP_P = os.getenv("VLLM_TOP_P", 0.9)
+VLLM_TEMPERATURE = os.getenv("VLLM_TEMPERATURE", 0.8)
+VLLM_TIMEOUT = os.getenv("VLLM_TIMEOUT", 600)
 
 # Text Embeddings Inference configuration
 TEI_EMBEDDING_ENDPOINT = os.getenv("TEI_EMBEDDING_ENDPOINT")
@@ -31,7 +32,7 @@ EMBED_SOURCE_DOCUMENTS = os.getenv("EMBED_SOURCE_DOCUMENTS", "true").lower() == 
 EMBED_NODES = os.getenv("EMBED_NODES", "false").lower() == "true"
 EMBED_RELATIONSHIPS = os.getenv("EMBED_RELATIONSHIPS", "false").lower() == "true"
 
-# OpenAI configuration (alternative to TGI & TEI)
+# OpenAI configuration (alternative to VLLM & TEI)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_CHAT_MODEL = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o")
 OPENAI_CHAT_TEMPERATURE = os.getenv("OPENAI_CHAT_TEMPERATURE", 0)
