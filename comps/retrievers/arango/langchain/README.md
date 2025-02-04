@@ -122,7 +122,7 @@ ArangoDB Connection configuration
 ArangoDB Vector configuration
 - `ARANGO_GRAPH_NAME`: The name of the graph that contains the document collection. It is always assumed that the graph contains a document collection, which is named as `"{ARANGO_GRAPH_NAME}_SOURCE"`. This collection contains the documents to be retrieved, which have been inserted by the Arango DataPrep service. Defaults to `GRAPH`. Additionally, it is possible to specify the Graph Name via the `text` parameter of the `/v1/retrieval` endpoint, using the `text: "query | graph_name"` syntax. For example, `text: "What is the revenue of Nike in 2023? | MySportsGraph"`. In this case, the graph name used will be `MySportsGraph`, which means the document collection will be `MySportsGraph_SOURCE`. This is useful if you have multiple graphs in the database.
 - `ARANGO_DISTANCE_STRATEGY`: The distance strategy to use for the embeddings. Options are `COSINE` and `L2` (euclidean distance).
-- `ARANGO_USE_APPROX_SEARCH`: Whether to use approximate neighbor search. If False, exact search will be used (slower, but more accurate). If True, approximate search will be used (faster, but less accurate). Defaults to `True`.
+- `ARANGO_USE_APPROX_SEARCH`: Whether to use approximate neighbor search. If False, exact search will be used (slower, but more accurate). If True, approximate search will be used (faster, but less accurate). Defaults to `False`.
 - `ARANGO_TEXT_FIELD`:  The document field name storing the text.
 - `ARANGO_EMBEDDING_FIELD`: The document field name storing the embeddings.
 - `ARANGO_NUM_CENTROIDS`: The number of centroids to use for the approximate search. Defaults to `1`, which is essentially exhaustive search.

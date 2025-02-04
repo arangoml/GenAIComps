@@ -16,7 +16,7 @@ ARANGO_GRAPH_NAME = os.getenv("ARANGO_GRAPH_NAME", "GRAPH")
 ARANGO_USE_GRAPH_NAME = os.getenv("ARANGO_USE_GRAPH_NAME", "true").lower() == "true"
 
 # Text Generation Inference configuration
-TGI_LLM_ENDPOINT = os.getenv("TGI_LLM_ENDPOINT", "http://localhost:8080")
+TGI_LLM_ENDPOINT = os.getenv("TGI_LLM_ENDPOINT")
 TGI_LLM_MAX_NEW_TOKENS = os.getenv("TGI_LLM_MAX_NEW_TOKENS", 512)
 TGI_LLM_TOP_K = os.getenv("TGI_LLM_TOP_K", 40)
 TGI_LLM_TOP_P = os.getenv("TGI_LLM_TOP_P", 0.9)

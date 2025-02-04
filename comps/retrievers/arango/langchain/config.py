@@ -12,7 +12,7 @@ ARANGO_DB_NAME = os.getenv("ARANGO_DB_NAME", "_system")
 # ArangoDB Vector configuration
 ARANGO_GRAPH_NAME = os.getenv("ARANGO_GRAPH_NAME", "GRAPH")
 ARANGO_DISTANCE_STRATEGY = os.getenv("ARANGO_DISTANCE_STRATEGY", "COSINE")
-ARANGO_USE_APPROX_SEARCH = os.getenv("ARANGO_USE_APPROX_SEARCH", "true").lower() == "true"
+ARANGO_USE_APPROX_SEARCH = os.getenv("ARANGO_USE_APPROX_SEARCH", "false").lower() == "true"
 ARANGO_TEXT_FIELD = os.getenv("ARANGO_TEXT_FIELD", "text")
 ARANGO_EMBEDDING_FIELD = os.getenv("ARANGO_EMBEDDING_FIELD", "embedding")
 ARANGO_NUM_CENTROIDS = os.getenv("ARANGO_NUM_CENTROIDS", 1)
@@ -26,12 +26,12 @@ ARANGO_TRAVERSAL_MAX_RETURNED = os.getenv("ARANGO_TRAVERSAL_MAX_RETURNED", 0)
 SUMMARIZER_ENABLED = os.getenv("SUMMARIZER_ENABLED", "false").lower() == "true"
 
 # Text Embeddings Inference configuration
-TEI_EMBED_MODEL = os.getenv("TEI_EMBED_MODEL", "BAAI/bge-base-en-v1.5")
-TEI_EMBEDDING_ENDPOINT = os.getenv("TEI_EMBEDDING_ENDPOINT", "")
+TEI_EMBEDDING_ENDPOINT = os.getenv("TEI_EMBEDDING_ENDPOINT")
 HUGGINGFACEHUB_API_TOKEN = os.getenv("HUGGINGFACEHUB_API_TOKEN")
+TEI_EMBED_MODEL = os.getenv("TEI_EMBED_MODEL", "BAAI/bge-base-en-v1.5")
 
 # Text Generation Inference configuration
-TGI_LLM_ENDPOINT = os.getenv("TGI_LLM_ENDPOINT", "http://localhost:8080")
+TGI_LLM_ENDPOINT = os.getenv("TGI_LLM_ENDPOINT")
 TGI_LLM_MAX_NEW_TOKENS = os.getenv("TGI_LLM_MAX_NEW_TOKENS", 512)
 TGI_LLM_TOP_K = os.getenv("TGI_LLM_TOP_K", 40)
 TGI_LLM_TOP_P = os.getenv("TGI_LLM_TOP_P", 0.9)
