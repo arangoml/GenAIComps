@@ -287,6 +287,18 @@ async def ingest_documents(
 
 if __name__ == "__main__":
 
+    if ALLOWED_NODES and isinstance(ALLOWED_NODES, str):
+        ALLOWED_NODES = ALLOWED_NODES.split(",")
+
+    if ALLOWED_RELATIONSHIPS and isinstance(ALLOWED_RELATIONSHIPS, str):
+        ALLOWED_RELATIONSHIPS = ALLOWED_RELATIONSHIPS.split(",")
+
+    if NODE_PROPERTIES and isinstance(NODE_PROPERTIES, str):
+        NODE_PROPERTIES = NODE_PROPERTIES.split(",")
+
+    if RELATIONSHIP_PROPERTIES and isinstance(RELATIONSHIP_PROPERTIES, str):
+        RELATIONSHIP_PROPERTIES = RELATIONSHIP_PROPERTIES.split(",")
+
     #############################
     # Text Generation Inference #
     #############################

@@ -16,7 +16,7 @@ ARANGO_GRAPH_NAME = os.getenv("ARANGO_GRAPH_NAME", "GRAPH")
 ARANGO_USE_GRAPH_NAME = os.getenv("ARANGO_USE_GRAPH_NAME", "true").lower() == "true"
 
 # VLLM configuration
-VLLM_ENDPOINT = os.getenv("VLLM_ENDPOINT", "http://localhost:9090")
+VLLM_ENDPOINT = os.getenv("VLLM_ENDPOINT")
 VLLM_MODEL_ID = os.getenv("VLLM_MODEL_ID", "Intel/neural-chat-7b-v3-3")
 VLLM_MAX_NEW_TOKENS = os.getenv("VLLM_MAX_NEW_TOKENS", 512)
 VLLM_TOP_P = os.getenv("VLLM_TOP_P", 0.9)
