@@ -30,15 +30,15 @@ TEI_EMBEDDING_ENDPOINT = os.getenv("TEI_EMBEDDING_ENDPOINT")
 HUGGINGFACEHUB_API_TOKEN = os.getenv("HUGGINGFACEHUB_API_TOKEN")
 TEI_EMBED_MODEL = os.getenv("TEI_EMBED_MODEL", "BAAI/bge-base-en-v1.5")
 
-# Text Generation Inference configuration
-TGI_LLM_ENDPOINT = os.getenv("TGI_LLM_ENDPOINT")
-TGI_LLM_MAX_NEW_TOKENS = os.getenv("TGI_LLM_MAX_NEW_TOKENS", 512)
-TGI_LLM_TOP_K = os.getenv("TGI_LLM_TOP_K", 40)
-TGI_LLM_TOP_P = os.getenv("TGI_LLM_TOP_P", 0.9)
-TGI_LLM_TEMPERATURE = os.getenv("TGI_LLM_TEMPERATURE", 0.8)
-TGI_LLM_TIMEOUT = os.getenv("TGI_LLM_TIMEOUT", 600)
+# VLLM configuration
+VLLM_ENDPOINT = os.getenv("VLLM_ENDPOINT")
+VLLM_MODEL_ID = os.getenv("VLLM_MODEL_ID", "Intel/neural-chat-7b-v3-3")
+VLLM_MAX_NEW_TOKENS = os.getenv("VLLM_MAX_NEW_TOKENS", 512)
+VLLM_TOP_P = os.getenv("VLLM_TOP_P", 0.9)
+VLLM_TEMPERATURE = os.getenv("VLLM_TEMPERATURE", 0.8)
+VLLM_TIMEOUT = os.getenv("VLLM_TIMEOUT", 600)
 
-# OpenAI configuration (alternative to TEI & local model)
+# OpenAI configuration (alternative to VLLM & TEI)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_CHAT_MODEL = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o")
 OPENAI_CHAT_TEMPERATURE = os.getenv("OPENAI_CHAT_TEMPERATURE", 0)
