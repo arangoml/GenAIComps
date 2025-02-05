@@ -397,41 +397,37 @@ if __name__ == "__main__":
     # Text Generation Inference (optional) #
     ########################################
 
-    # Ref: https://api.python.langchain.com/en/latest/graph_transformers/langchain_experimental.graph_transformers.llm.LLMGraphTransformer.html#langchain_experimental.graph_transformers.llm.LLMGraphTransformer.__init__
-    ignore_tool_usage = False
-
-    if OPENAI_API_KEY and OPENAI_CHAT_ENABLED:
-        if logflag:
-            logger.info("OpenAI API Key is set. Verifying its validity...")
-        openai.api_key = OPENAI_API_KEY
-
-        try:
-            openai.models.list()
+    llm = None
+    if SUMMARIZER_ENABLED:
+        if OPENAI_API_KEY and OPENAI_CHAT_ENABLED:
             if logflag:
-                logger.info("OpenAI API Key is valid.")
-            llm = ChatOpenAI(temperature=OPENAI_CHAT_TEMPERATURE, model=OPENAI_CHAT_MODEL, max_tokens=512)
-        except openai.error.AuthenticationError:
-            if logflag:
-                logger.info("OpenAI API Key is invalid.")
-        except Exception as e:
-            if logflag:
-                logger.info(f"An error occurred while verifying the API Key: {e}")
+                logger.info("OpenAI API Key is set. Verifying its validity...")
+            openai.api_key = OPENAI_API_KEY
 
-    elif VLLM_ENDPOINT:
-        llm = ChatOpenAI(
-            openai_api_key="EMPTY",
-            openai_api_base=f"{VLLM_ENDPOINT}/v1",
-            model=VLLM_MODEL_ID,
-            temperature=VLLM_TEMPERATURE,
-            max_tokens=VLLM_MAX_NEW_TOKENS,
-            top_p=VLLM_TOP_P,
-            timeout=VLLM_TIMEOUT,
-        )
+            try:
+                openai.models.list()
+                if logflag:
+                    logger.info("OpenAI API Key is valid.")
+                llm = ChatOpenAI(temperature=OPENAI_CHAT_TEMPERATURE, model=OPENAI_CHAT_MODEL, max_tokens=512)
+            except openai.error.AuthenticationError:
+                if logflag:
+                    logger.info("OpenAI API Key is invalid.")
+            except Exception as e:
+                if logflag:
+                    logger.info(f"An error occurred while verifying the API Key: {e}")
 
-        # Setting this to False with VLLM causes Internal Server Error
-        ignore_tool_usage = True  # TODO: Revisit this HACK
-    else:
-        raise ValueError("No text generation environment variables are set, cannot generate graphs.")
+        elif VLLM_ENDPOINT:
+            llm = ChatOpenAI(
+                openai_api_key="EMPTY",
+                openai_api_base=f"{VLLM_ENDPOINT}/v1",
+                model=VLLM_MODEL_ID,
+                temperature=VLLM_TEMPERATURE,
+                max_tokens=VLLM_MAX_NEW_TOKENS,
+                top_p=VLLM_TOP_P,
+                timeout=VLLM_TIMEOUT,
+            )
+        else:
+            raise ValueError("No text generation environment variables are set, cannot summarize search results.")
 
     ############
     # ArangoDB #
