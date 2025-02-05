@@ -7,3 +7,7 @@ services:
     build:
       dockerfile: comps/feedback_management/mongo/Dockerfile
     image: ${REGISTRY:-opea}/feedbackmanagement:${TAG:-latest}
+  feedbackmanagement-arango-server:
+    build:
+      dockerfile: comps/feedback_management/arango/Dockerfile
+    image: ${REGISTRY:-opea}/feedbackmanagement-arango-server:${TAG:-latest}

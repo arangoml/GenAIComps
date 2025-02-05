@@ -1,0 +1,400 @@
+# Copyright (C) 2024 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+
+import json
+import os
+from typing import List, Optional, Union
+
+import openai
+from arango import ArangoClient
+from config import (
+    ALLOWED_NODES,
+    ALLOWED_RELATIONSHIPS,
+    ARANGO_BATCH_SIZE,
+    ARANGO_DB_NAME,
+    ARANGO_GRAPH_NAME,
+    ARANGO_INSERT_ASYNC,
+    ARANGO_PASSWORD,
+    ARANGO_URL,
+    ARANGO_USE_GRAPH_NAME,
+    ARANGO_USERNAME,
+    CHUNK_OVERLAP,
+    CHUNK_SIZE,
+    EMBED_NODES,
+    EMBED_RELATIONSHIPS,
+    EMBED_SOURCE_DOCUMENTS,
+    HUGGINGFACEHUB_API_TOKEN,
+    NODE_PROPERTIES,
+    OPENAI_API_KEY,
+    OPENAI_CHAT_ENABLED,
+    OPENAI_CHAT_MODEL,
+    OPENAI_CHAT_TEMPERATURE,
+    OPENAI_EMBED_DIMENSION,
+    OPENAI_EMBED_ENABLED,
+    OPENAI_EMBED_MODEL,
+    PROCESS_TABLE,
+    RELATIONSHIP_PROPERTIES,
+    SYSTEM_PROMPT_PATH,
+    TABLE_STRATEGY,
+    TEI_EMBED_MODEL,
+    TEI_EMBEDDING_ENDPOINT,
+    VLLM_ENDPOINT,
+    VLLM_MAX_NEW_TOKENS,
+    VLLM_MODEL_ID,
+    VLLM_TEMPERATURE,
+    VLLM_TIMEOUT,
+    VLLM_TOP_P,
+)
+from fastapi import File, Form, HTTPException, UploadFile
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.embeddings import HuggingFaceBgeEmbeddings, HuggingFaceHubEmbeddings
+from langchain_community.graphs.arangodb_graph import ArangoGraph
+from langchain_core.documents import Document
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_experimental.graph_transformers import LLMGraphTransformer
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain_text_splitters import HTMLHeaderTextSplitter
+
+from comps import CustomLogger, DocPath, opea_microservices, register_microservice
+from comps.dataprep.utils import (
+    document_loader,
+    encode_filename,
+    get_separators,
+    get_tables_result,
+    parse_html,
+    save_content_to_local_disk,
+)
+
+logger = CustomLogger("prepare_doc_arango")
+logflag = os.getenv("LOGFLAG", True)
+
+upload_folder = "./uploaded_files/"
+
+PROMPT_TEMPLATE = None
+if SYSTEM_PROMPT_PATH is not None:
+    try:
+        with open(SYSTEM_PROMPT_PATH, "r") as f:
+            PROMPT_TEMPLATE = ChatPromptTemplate.from_messages(
+                [
+                    (
+                        "system",
+                        f.read(),
+                    ),
+                    (
+                        "human",
+                        (
+                            "Tip: Make sure to answer in the correct format and do "
+                            "not include any explanations. "
+                            "Use the given format to extract information from the "
+                            "following input: {input}"
+                        ),
+                    ),
+                ]
+            )
+    except Exception as e:
+        logger.error(f"Could not set custom Prompt: {e}")
+
+
+def ingest_data_to_arango(doc_path: DocPath) -> str:
+    """Ingest document to ArangoDB."""
+    path = doc_path.path
+
+    if logflag:
+        logger.info(f"Parsing document {path}.")
+
+    ############
+    # Chunking #
+    ############
+
+    if path.endswith(".html"):
+        headers_to_split_on = [
+            ("h1", "Header 1"),
+            ("h2", "Header 2"),
+            ("h3", "Header 3"),
+        ]
+        text_splitter = HTMLHeaderTextSplitter(headers_to_split_on=headers_to_split_on)
+    else:
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=doc_path.chunk_size,
+            chunk_overlap=doc_path.chunk_overlap,
+            add_start_index=True,
+            separators=get_separators(),
+        )
+
+    content = document_loader(path)
+
+    structured_types = [".xlsx", ".csv", ".json", "jsonl"]
+    _, ext = os.path.splitext(path)
+
+    if ext in structured_types:
+        chunks = content
+    else:
+        chunks = text_splitter.split_text(content)
+
+    if doc_path.process_table and path.endswith(".pdf"):
+        table_chunks = get_tables_result(path, doc_path.table_strategy)
+        if isinstance(table_chunks, list):
+            chunks = chunks + table_chunks
+
+    if logflag:
+        logger.info(f"Created {len(chunks)} chunks of the original file.")
+
+    ################################
+    # Graph generation & insertion #
+    ################################
+
+    graph = ArangoGraph(
+        db=db,
+        include_examples=False,
+        generate_schema_on_init=False,
+    )
+
+    if ARANGO_USE_GRAPH_NAME:
+        graph_name = ARANGO_GRAPH_NAME
+    else:
+        file_name = os.path.basename(path).split(".")[0]
+        graph_name = "".join(c for c in file_name if c.isalnum() or c in "_-:.@()+,=;$!*'%")
+
+    if logflag:
+        logger.info(f"Creating graph {graph_name}.")
+
+    for i, text in enumerate(chunks):
+        document = Document(page_content=text)
+
+        if logflag:
+            logger.info(f"Chunk {i}: extracting nodes & relationships.")
+
+        graph_doc = llm_transformer.process_response(document)
+
+        if logflag:
+            logger.info(f"Chunk {i}: inserting into ArangoDB.")
+
+        graph.add_graph_documents(
+            graph_documents=[graph_doc],
+            include_source=True,
+            graph_name=graph_name,
+            update_graph_definition_if_exists=False,
+            batch_size=ARANGO_BATCH_SIZE,
+            use_one_entity_collection=True,
+            insert_async=ARANGO_INSERT_ASYNC,
+            embeddings=embeddings,
+            embedding_field="embedding",
+            embed_source=EMBED_SOURCE_DOCUMENTS,
+            embed_nodes=EMBED_NODES,
+            embed_relationships=EMBED_RELATIONSHIPS,
+        )
+
+        if logflag:
+            logger.info(f"Chunk {i}: processed.")
+
+    if logflag:
+        logger.info("The graph is built.")
+
+    return graph_name
+
+
+@register_microservice(
+    name="opea_service@prepare_doc_arango",
+    endpoint="/v1/dataprep",
+    host="0.0.0.0",
+    port=6007,
+    input_datatype=DocPath,
+    output_datatype=None,
+)
+async def ingest_documents(
+    files: Optional[Union[UploadFile, List[UploadFile]]] = File(None),
+    link_list: Optional[str] = Form(None),
+    chunk_size: int = Form(CHUNK_SIZE),
+    chunk_overlap: int = Form(CHUNK_OVERLAP),
+    process_table: bool = Form(PROCESS_TABLE),
+    table_strategy: str = Form(TABLE_STRATEGY),
+):
+    if logflag:
+        logger.info(f"files:{files}")
+        logger.info(f"link_list:{link_list}")
+
+    if not files and not link_list:
+        raise HTTPException(status_code=400, detail="Must provide either a file or a string list.")
+
+    graph_names_created = set()
+
+    if files:
+        if not isinstance(files, list):
+            files = [files]
+        uploaded_files = []
+        for file in files:
+            encode_file = encode_filename(file.filename)
+            save_path = upload_folder + encode_file
+            await save_content_to_local_disk(save_path, file)
+            try:
+                graph_name = ingest_data_to_arango(
+                    DocPath(
+                        path=save_path,
+                        chunk_size=chunk_size,
+                        chunk_overlap=chunk_overlap,
+                        process_table=process_table,
+                        table_strategy=table_strategy,
+                    ),
+                )
+
+                uploaded_files.append(save_path)
+                graph_names_created.add(graph_name)
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Failed to ingest {save_path} into ArangoDB: {e}")
+
+            if logflag:
+                logger.info(f"Successfully saved file {save_path}")
+
+    if link_list:
+        link_list = json.loads(link_list)  # Parse JSON string to list
+        if not isinstance(link_list, list):
+            raise HTTPException(status_code=400, detail="link_list should be a list.")
+        for link in link_list:
+            encoded_link = encode_filename(link)
+            save_path = upload_folder + encoded_link + ".txt"
+            content = parse_html([link])[0][0]
+            await save_content_to_local_disk(save_path, content)
+            try:
+                graph_name = ingest_data_to_arango(
+                    DocPath(
+                        path=save_path,
+                        chunk_size=chunk_size,
+                        chunk_overlap=chunk_overlap,
+                        process_table=process_table,
+                        table_strategy=table_strategy,
+                    ),
+                )
+                graph_names_created.add(graph_name)
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Failed to ingest {save_path} into ArangoDB: {e}")
+
+            if logflag:
+                logger.info(f"Successfully saved link {link}")
+
+    graph_names_created = list(graph_names_created)
+
+    result = {
+        "status": 200,
+        "message": f"Data preparation succeeded: {graph_names_created}",
+        "graph_names": graph_names_created,
+    }
+
+    if logflag:
+        logger.info(result)
+
+    return result
+
+
+if __name__ == "__main__":
+
+    if ALLOWED_NODES and isinstance(ALLOWED_NODES, str):
+        ALLOWED_NODES = ALLOWED_NODES.split(",")
+
+    if ALLOWED_RELATIONSHIPS and isinstance(ALLOWED_RELATIONSHIPS, str):
+        ALLOWED_RELATIONSHIPS = ALLOWED_RELATIONSHIPS.split(",")
+
+    if NODE_PROPERTIES and isinstance(NODE_PROPERTIES, str):
+        NODE_PROPERTIES = NODE_PROPERTIES.split(",")
+
+    if RELATIONSHIP_PROPERTIES and isinstance(RELATIONSHIP_PROPERTIES, str):
+        RELATIONSHIP_PROPERTIES = RELATIONSHIP_PROPERTIES.split(",")
+
+    #############################
+    # Text Generation Inference #
+    #############################
+
+    # Ref: https://api.python.langchain.com/en/latest/graph_transformers/langchain_experimental.graph_transformers.llm.LLMGraphTransformer.html#langchain_experimental.graph_transformers.llm.LLMGraphTransformer.__init__
+    ignore_tool_usage = False
+
+    if OPENAI_API_KEY and OPENAI_CHAT_ENABLED:
+        if logflag:
+            logger.info("OpenAI API Key is set. Verifying its validity...")
+        openai.api_key = OPENAI_API_KEY
+
+        try:
+            openai.models.list()
+            if logflag:
+                logger.info("OpenAI API Key is valid.")
+            llm = ChatOpenAI(temperature=OPENAI_CHAT_TEMPERATURE, model_name=OPENAI_CHAT_MODEL)
+        except openai.error.AuthenticationError:
+            if logflag:
+                logger.info("OpenAI API Key is invalid.")
+        except Exception as e:
+            if logflag:
+                logger.info(f"An error occurred while verifying the API Key: {e}")
+
+    elif VLLM_ENDPOINT:
+        llm = ChatOpenAI(
+            openai_api_key="EMPTY",
+            openai_api_base=f"{VLLM_ENDPOINT}/v1",
+            model=VLLM_MODEL_ID,
+            temperature=VLLM_TEMPERATURE,
+            max_tokens=VLLM_MAX_NEW_TOKENS,
+            top_p=VLLM_TOP_P,
+            timeout=VLLM_TIMEOUT,
+        )
+
+        # Setting this to False with VLLM causes Internal Server Error
+        ignore_tool_usage = True  # TODO: Revisit this HACK
+    else:
+        raise ValueError("No text generation environment variables are set, cannot generate graphs.")
+
+    try:
+        llm_transformer = LLMGraphTransformer(
+            llm=llm,
+            allowed_nodes=ALLOWED_NODES,
+            allowed_relationships=ALLOWED_RELATIONSHIPS,
+            prompt=PROMPT_TEMPLATE,
+            node_properties=NODE_PROPERTIES or False,
+            relationship_properties=RELATIONSHIP_PROPERTIES or False,
+            ignore_tool_usage=ignore_tool_usage,
+        )
+    except (TypeError, ValueError) as e:
+        if logflag:
+            logger.warning(f"Advanced LLMGraphTransformer failed: {e}")
+        # Fall back to basic config
+        try:
+            llm_transformer = LLMGraphTransformer(llm=llm, ignore_tool_usage=ignore_tool_usage)
+        except (TypeError, ValueError) as e:
+            if logflag:
+                logger.error(f"Failed to initialize LLMGraphTransformer: {e}")
+            raise e
+
+    ########################################
+    # Text Embeddings Inference (optional) #
+    ########################################
+
+    if OPENAI_API_KEY and OPENAI_EMBED_ENABLED:
+        # Use OpenAI embeddings
+        embeddings = OpenAIEmbeddings(
+            model=OPENAI_EMBED_MODEL,
+            dimensions=OPENAI_EMBED_DIMENSION,
+        )
+
+    elif TEI_EMBEDDING_ENDPOINT and HUGGINGFACEHUB_API_TOKEN:
+        # Use TEI endpoint service
+        embeddings = HuggingFaceHubEmbeddings(
+            model=TEI_EMBEDDING_ENDPOINT,
+            huggingfacehub_api_token=HUGGINGFACEHUB_API_TOKEN,
+        )
+    elif TEI_EMBED_MODEL:
+        # Use local embedding model
+        embeddings = HuggingFaceBgeEmbeddings(model_name=TEI_EMBED_MODEL)
+    else:
+        raise ValueError("No embeddings environment variables are set, cannot generate embeddings.")
+
+    ############
+    # ArangoDB #
+    ############
+
+    client = ArangoClient(hosts=ARANGO_URL)
+    sys_db = client.db(name="_system", username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
+
+    if not sys_db.has_database(ARANGO_DB_NAME):
+        sys_db.create_database(ARANGO_DB_NAME)
+
+    db = client.db(name=ARANGO_DB_NAME, username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
+    if logflag:
+        logger.info(f"Connected to ArangoDB {db.version()}.")
+
+    opea_microservices["opea_service@prepare_doc_arango"].start()
